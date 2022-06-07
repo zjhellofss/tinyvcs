@@ -67,6 +67,16 @@ class Player {
       fmt_ctx_ = nullptr;
     }
 
+    if (sws_context_) {
+      sws_freeContext(sws_context_);
+      sws_context_ = nullptr;
+    }
+
+    if (this->data_[0] != nullptr) {
+      unsigned char *p = this->data_[0];
+      delete[]p;
+    }
+
   }
   bool Open() {
     fmt_ctx_ = avformat_alloc_context();
@@ -161,6 +171,25 @@ class Player {
       }
     }
     LOG(INFO) << fmt::format("fps={} duration={} start_time={}", fps_, duration_, start_time_);
+
+    int sw = codec_ctx_->width;
+    int sh = codec_ctx_->height;
+    src_pixel_fmt = codec_ctx_->pix_fmt;
+    if (sw <= 0 || sh <= 0 || src_pixel_fmt == AV_PIX_FMT_NONE) {
+      LOG(ERROR) << "Get pixel format error";
+      return false;
+    }
+    int dw = sw >> 2 << 2;
+    int dh = sh;
+    dst_pixel_fmt = AV_PIX_FMT_BGR24;
+    sws_context_ = sws_getContext(sw, sh, src_pixel_fmt, dw, dh, dst_pixel_fmt, SWS_BICUBIC,
+                                  nullptr, nullptr, nullptr);
+    if (!sws_context_) {
+      LOG(ERROR) << "sws_getContext failed";
+      return false;
+    }
+    data_[0] = new unsigned char[dw * dh * 3];
+    linesize_[0] = dw * 3;
     return true;
   }
 
@@ -178,11 +207,15 @@ class Player {
  private:
   std::vector<std::thread> threads_;
   const std::string input_rtsp_;
+  AVPixelFormat src_pixel_fmt{};
+  AVPixelFormat dst_pixel_fmt{};
+  SwsContext *sws_context_ = nullptr;
   AVFormatContext *fmt_ctx_ = nullptr;
   AVCodecContext *codec_ctx_ = nullptr;
   AVDictionary *fmt_opts_ = nullptr;
   AVDictionary *codec_opts_ = nullptr;
-
+  uint8_t *data_[4] = {nullptr, nullptr, nullptr, nullptr};
+  int linesize_[4];
   int video_stream_index_ = -1;
   int audio_stream_index_ = -1;
   int subtitle_stream_index_ = -1;
@@ -192,7 +225,8 @@ class Player {
   int64_t duration_ = 0;
   int64_t start_time_ = 0;
   int stream_idx_ = 0;
-  SynchronizedVector<Frame> frames_;
+  std::atomic_bool is_runable_ = false;
+  SynchronizedVector<std::shared_ptr<AVFrame>> frames_;
  public:
   int64_t block_starttime_ = time(nullptr);
   int64_t block_timeout_ = 10;
@@ -201,6 +235,9 @@ class Player {
 void Player::ReadPackets() {
   int64_t pts = 0;
   while (true) {
+    if (!is_runable_) {
+      break;
+    }
     fmt_ctx_->interrupt_callback.callback = InterruptCallback;
     fmt_ctx_->interrupt_callback.opaque = this;
     block_starttime_ = time(nullptr);
@@ -244,33 +281,66 @@ void Player::ReadPackets() {
         break;
       }
     }
-    LOG(INFO) << "frame pts: " << frame->pts;
+    LOG(INFO) << fmt::format("frame pts:{} width:{} height:{} ", frame->pts, frame->width, frame->height);
     pts += 1;
-    Frame f(stream_idx_, pts, frame);
-    frames_.Push(f);
+    frames_.Push(frame);
   }
+  is_runable_ = false;
+  LOG(INFO) << "Read packet process is exited!";
 }
 
 void Player::DecodePackets() {
-
+  while (true) {
+    if (!is_runable_) {
+      break;
+    }
+    std::shared_ptr<AVFrame> f_ops;
+    try {
+      f_ops = this->frames_.Pop();
+    }
+    catch (std::exception &e) {
+      LOG(ERROR) << e.what();
+      if (!is_runable_ && this->frames_.Empty()) {
+        break;
+      }
+    }
+    if (!f_ops) {
+      break;
+    } else {
+      AVFrame *show_frame = f_ops.get();
+      int width = show_frame->width;
+      int height = show_frame->height;
+      if (width == 0 || height == 0) {
+        continue;
+      }
+      cv::Mat image = cv::Mat(height, width, CV_8UC3);
+      const int h = sws_scale(sws_context_, show_frame->data, show_frame->linesize, 0, height,
+                              &image.data, linesize_);
+      if (h < 0 || h != show_frame->height) {
+        LOG(ERROR) << "sws scale convert failed " << show_frame->pts;
+      } else {
+        int64_t pts = show_frame->pts;
+      }
+    }
+  }
+  is_runable_ = false;
+  LOG(INFO) << "Decode packet process is exited!";
 }
 void Player::Run() {
+  is_runable_ = true;
   std::thread t1([this]() {
     this->ReadPackets();
   });
   threads_.push_back(std::move(t1));
+
+  std::thread t2([this]() {
+    this->DecodePackets();
+  });
+  threads_.push_back(std::move(t2));
 }
 
 Player::Player(int stream_idx, std::string rtsp) : stream_idx_(stream_idx), input_rtsp_(std::move(rtsp)) {
-  while (true) {
-    auto f_ops = this->frames_.Pop();
-    if (!f_ops.has_value()) {
-      continue;
-    } else {
-      auto frame = *f_ops;
 
-    }
-  }
 }
 
 static int InterruptCallback(void *opaque) {
@@ -290,9 +360,10 @@ int main(int argc, char *argv[]) {
   FLAGS_alsologtostderr = true;
   Player p(0, "rtsp://127.0.0.1:8554/mystream");
   bool b = p.Open();
-
   assert(b);
+  LOG(INFO) << "process start";
   p.Run();
+
   google::ShutdownGoogleLogging();
   return 0;
 }
