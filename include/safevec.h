@@ -2,8 +2,8 @@
 // Created by fss on 22-6-6.
 //
 
-#ifndef TINYVCS_INCLUDE_SAFE_VECTOR_H_
-#define TINYVCS_INCLUDE_SAFE_VECTOR_H_
+#ifndef TINYVCS_INCLUDE_SAFEVEC_H_
+#define TINYVCS_INCLUDE_SAFEVEC_H_
 
 #include <mutex>
 #include <optional>
@@ -154,4 +154,4 @@ bool SynchronizedVector<T>::Full() {
 //  }
 //}
 
-#endif //TINYVCS_INCLUDE_SAFE_VECTOR_H_
+#endif //TINYVCS_INCLUDE_SAFEVEC_H_

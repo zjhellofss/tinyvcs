@@ -1,17 +1,16 @@
 //
 // Created by fss on 22-6-6.
 //
-#include "ffmpeg_utils.h"
+#include "ffmpeg.h"
 #include "glog/logging.h"
 #include "fmt/core.h"
 #include "opencv2/opencv.hpp"
-#include "frame.h"
-#include "safe_vector.h"
+#include "convert.h"
+#include "safevec.h"
 
 #include <string>
 #include <utility>
 #include <memory>
-#include <optional>
 #include <thread>
 #include <cassert>
 
@@ -215,7 +214,7 @@ class Player {
   AVDictionary *fmt_opts_ = nullptr;
   AVDictionary *codec_opts_ = nullptr;
   uint8_t *data_[4] = {nullptr, nullptr, nullptr, nullptr};
-  int linesize_[4];
+  int linesize_[4]{0, 0, 0, 0};
   int video_stream_index_ = -1;
   int audio_stream_index_ = -1;
   int subtitle_stream_index_ = -1;
@@ -233,7 +232,6 @@ class Player {
 };
 
 void Player::ReadPackets() {
-  int64_t pts = 0;
   while (true) {
     if (!is_runable_) {
       break;
@@ -282,7 +280,6 @@ void Player::ReadPackets() {
       }
     }
     LOG(INFO) << fmt::format("frame pts:{} width:{} height:{} ", frame->pts, frame->width, frame->height);
-    pts += 1;
     frames_.Push(frame);
   }
   is_runable_ = false;
@@ -305,21 +302,34 @@ void Player::DecodePackets() {
       }
     }
     if (!f_ops) {
-      break;
+      continue;
     } else {
       AVFrame *show_frame = f_ops.get();
+      if (!show_frame) {
+        LOG(ERROR) << "Read empty frame";
+      }
       int width = show_frame->width;
       int height = show_frame->height;
       if (width == 0 || height == 0) {
         continue;
       }
+      cv::Mat image4 = cv::Mat(height, width, CV_8UC4);
       cv::Mat image = cv::Mat(height, width, CV_8UC3);
-      const int h = sws_scale(sws_context_, show_frame->data, show_frame->linesize, 0, height,
-                              &image.data, linesize_);
-      if (h < 0 || h != show_frame->height) {
-        LOG(ERROR) << "sws scale convert failed " << show_frame->pts;
+      bool convert_success = false;
+      if (Convert(show_frame, image4)) {
+        cv::cvtColor(image4, image, cv::COLOR_BGRA2BGR);
+        convert_success = true;
       } else {
-        int64_t pts = show_frame->pts;
+        image = cv::Mat(height, width, CV_8UC3);
+        const int h = sws_scale(sws_context_, show_frame->data, show_frame->linesize, 0, height,
+                                &image.data, linesize_);
+        if (h < 0 || h != show_frame->height) {
+          LOG(ERROR) << "sws scale convert failed " << show_frame->pts;
+        }
+        convert_success = true;
+      }
+
+      if (convert_success) {
       }
     }
   }
@@ -339,7 +349,7 @@ void Player::Run() {
   threads_.push_back(std::move(t2));
 }
 
-Player::Player(int stream_idx, std::string rtsp) : stream_idx_(stream_idx), input_rtsp_(std::move(rtsp)) {
+Player::Player(int stream_idx, std::string rtsp) : input_rtsp_(std::move(rtsp)), stream_idx_(stream_idx) {
 
 }
 
@@ -351,19 +361,5 @@ static int InterruptCallback(void *opaque) {
     LOG(ERROR) << s;
     return 1;
   }
-  return 0;
-}
-
-int main(int argc, char *argv[]) {
-  google::InitGoogleLogging(argv[0]);
-  FLAGS_log_dir = "./log";
-  FLAGS_alsologtostderr = true;
-  Player p(0, "rtsp://127.0.0.1:8554/mystream");
-  bool b = p.Open();
-  assert(b);
-  LOG(INFO) << "process start";
-  p.Run();
-
-  google::ShutdownGoogleLogging();
   return 0;
 }
