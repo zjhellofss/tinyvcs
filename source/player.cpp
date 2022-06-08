@@ -113,6 +113,7 @@ void Player::DecodePackets() {
       int width = show_frame->width;
       int height = show_frame->height;
       if (width == 0 || height == 0 || width != dw_ || height != dh_) {
+        LOG(ERROR) << "Frame don't have correct size pts: "<<show_frame->pts;
         continue;
       }
       cv::Mat image4 = cv::Mat(height, width, CV_8UC4);
@@ -132,6 +133,7 @@ void Player::DecodePackets() {
       }
 
       if (convert_success) {
+        LOG(INFO) << "convert success";
       }
     }
   }
@@ -258,7 +260,7 @@ bool Player::Open() {
   dw_ = sw >> 2 << 2;
   dh_ = sh;
   dst_pixel_fmt = AV_PIX_FMT_BGR24;
-  sws_context_ = sws_getContext(sw, sh, src_pixel_fmt, dw, dh, dst_pixel_fmt, SWS_BICUBIC,
+  sws_context_ = sws_getContext(sw, sh, src_pixel_fmt, dw_, dh_, dst_pixel_fmt, SWS_BICUBIC,
                                 nullptr, nullptr, nullptr);
   if (!sws_context_) {
     LOG(ERROR) << "sws_getContext failed";
@@ -314,3 +316,14 @@ static int InterruptCallback(void *opaque) {
   return 0;
 }
 
+int main(int argc, char *argv[]) {
+  google::InitGoogleLogging(argv[0]);
+  FLAGS_log_dir = "./log";
+  FLAGS_alsologtostderr = true;
+  Player p(0, "rtsp://127.0.0.1:8554/mystream");
+  bool b = p.Open();
+  assert(b);
+  LOG(INFO) << "process start";
+  p.Run();
+  return 0;
+}

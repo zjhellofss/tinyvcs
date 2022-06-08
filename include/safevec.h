@@ -10,7 +10,6 @@
 #include <deque>
 #include <condition_variable>
 
-#pragma once
 #include <mutex>
 #include <stack>
 #include <atomic>
