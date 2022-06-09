@@ -118,7 +118,7 @@ void Player::DecodePackets() {
         continue;
       }
       cv::Mat image4 = cv::Mat(height, width, CV_8UC4);
-      cv::Mat image = cv::Mat(height, width, CV_8UC3);
+      cv::Mat image;
       bool convert_success = false;
       if (Convert(show_frame, image4)) {
         cv::cvtColor(image4, image, cv::COLOR_BGRA2BGR);

@@ -46,7 +46,9 @@ void VideoStream::ReadImages() {
                                  height,
                                  width,
                                  frame.pts_);
-        std::map<std::string, std::variant<float, int, std::string>> values;
+
+        vmaps values;
+        values.insert({"pts", frame.pts_});
         values.insert({"width", width});
         values.insert({"height", height});
         std::string json_res = create_json(values);
@@ -69,9 +71,13 @@ void VideoStream::ReadImages() {
   LOG(INFO) << "Read images process is exited!";
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+  google::InitGoogleLogging(argv[0]);
+//  FLAGS_log_dir = "./log";
+  FLAGS_alsologtostderr = true;
+  FLAGS_minloglevel = 0;
   std::vector<std::string> subscriptions;
-  subscriptions.push_back("ws://127.0.0.1:9002/");
+  subscriptions.emplace_back("ws://127.0.0.1:9002/");
   VideoStream stream(0, "rtsp://127.0.0.1:8554/mystream", subscriptions);
   bool b = stream.Open();
   stream.Run();

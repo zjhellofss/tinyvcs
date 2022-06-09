@@ -100,7 +100,7 @@ bool Connection::Send(const std::string &message) {
   } else {
     endpoint_.send(connection_meta_->GetHdl(), message, websocketpp::frame::opcode::text, ec);
     if (ec) {
-      std::cout << "Error sending message: " << ec.message() << std::endl;
+      LOG(ERROR) << "Error sending message: " << ec.message();
       return false;
     } else {
       LOG(INFO) << "Send message successfully";
