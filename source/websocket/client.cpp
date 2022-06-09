@@ -108,3 +108,6 @@ bool Connection::Send(const std::string &message) {
     }
   }
 }
+bool Connection::IsRunnable() const {
+  return connection_meta_->IsRunnable();
+}

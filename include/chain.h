@@ -4,6 +4,12 @@
 
 #ifndef TINYVCS_INCLUDE_CHAIN_H_
 #define TINYVCS_INCLUDE_CHAIN_H_
+#include <string>
+#include <vector>
+#include <thread>
+#include "websocket/client.h"
+#include "player.h"
+
 class VideoStream {
  public:
   explicit VideoStream(int stream_id, std::string rtsp_address, std::vector<std::string> subscriptions) : stream_id_(
