@@ -89,7 +89,7 @@ void Player::ReadPackets() {
 }
 
 void Player::DecodePackets() {
-  int pts = 0;
+  std::atomic_int pts = 0;
   while (true) {
     if (!is_runnable_) {
       break;
@@ -117,25 +117,20 @@ void Player::DecodePackets() {
         LOG(ERROR) << "Frame don't have correct size pts: " << show_frame->pts;
         continue;
       }
-      cv::Mat image4 = cv::Mat(height, width, CV_8UC4);
-      cv::Mat image;
-      bool convert_success = false;
-      if (Convert(show_frame, image4)) {
-        cv::cvtColor(image4, image, cv::COLOR_BGRA2BGR);
-        convert_success = true;
-      } else {
-        image = cv::Mat(height, width, CV_8UC3);
-        const int h = sws_scale(sws_context_, show_frame->data, show_frame->linesize, 0, height,
-                                &image.data, linesize_);
-        if (h < 0 || h != show_frame->height) {
-          LOG(ERROR) << "sws scale convert failed " << show_frame->pts;
-          convert_success = false;
-        } else
-          convert_success = true;
-      }
 
-      if (convert_success) {
-        Frame f(pts, image);
+      cv::Mat image = cv::Mat(height, width, CV_8UC3);
+      const int h = sws_scale(sws_context_, show_frame->data, show_frame->linesize, 0, height,
+                              &image.data, linesize_);
+      if (h < 0 || h != show_frame->height) {
+        LOG(ERROR) << "sws scale convert failed " << show_frame->pts;
+      } else {
+        Frame f(pts, show_frame->pts, image);
+        cv::imwrite(fmt::format("./tmp/window_{}.jpg", f.pts_), f.image_);
+        LOG(INFO) << fmt::format("convert origin_pts:{} pts:{} width:{} height:{} ",
+                                 show_frame->pts,
+                                 pts,
+                                 show_frame->width,
+                                 show_frame->height);
         this->decoded_images_.Push(f);
         pts += 1;
       }
