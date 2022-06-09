@@ -7,7 +7,7 @@
 #include <glog/logging.h>
 #include <fmt/core.h>
 
-#include "websocket/client.h"
+#include "client.h"
 
 void ConnectionMeta::OnOpen(client *c, websocketpp::connection_hdl hdl) {
   is_runnable_ = true; //连接打开
@@ -92,19 +92,18 @@ bool Connection::Connect(const std::string &uri) {
   return true;
 }
 
-bool Connection::Send(const std::string &message) {
+void Connection::Send(const std::string &message) {
   websocketpp::lib::error_code ec;
   if (!connection_meta_ || !connection_meta_->IsRunnable()) {
     LOG(ERROR) << "No connection found";
-    return false;
+    return;
   } else {
     endpoint_.send(connection_meta_->GetHdl(), message, websocketpp::frame::opcode::text, ec);
     if (ec) {
       std::cout << "Error sending message: " << ec.message() << std::endl;
-      return false;
+      return;
     } else {
       LOG(INFO) << "Send message successfully";
-      return true;
     }
   }
 }
