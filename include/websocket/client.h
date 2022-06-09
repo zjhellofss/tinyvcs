@@ -3,6 +3,9 @@
 //
 #ifndef TINYVCS_WEBSOCKET_CLIENT_H_
 #define TINYVCS_WEBSOCKET_CLIENT_H_
+#include <websocketpp/config/asio_no_tls_client.hpp>
+#include <websocketpp/client.hpp>
+#include <websocketpp/common/memory.hpp>
 typedef websocketpp::client<websocketpp::config::asio_client> client;
 class ConnectionMeta {
  public:
@@ -12,9 +15,9 @@ class ConnectionMeta {
 
   void OnOpen(client *c, websocketpp::connection_hdl hdl);
 
-  void OnClose(client *c, websocketpp::connection_hdl hdl) ;
+  void OnClose(client *c, websocketpp::connection_hdl hdl);
 
-  void OnFail(client *c, websocketpp::connection_hdl hdl) ;
+  void OnFail(client *c, websocketpp::connection_hdl hdl);
 
   void OnMessage(const websocketpp::connection_hdl &, const client::message_ptr &msg);
 
@@ -45,14 +48,14 @@ class Connection {
     thread_ = websocketpp::lib::make_shared<websocketpp::lib::thread>(&client::run, &endpoint_);
   }
 
-  ~Connection() ;
+  ~Connection();
 
   bool Connect(const std::string &uri);
 
-  void Send(const std::string &message);
+  bool Send(const std::string &message);
 
-  ConnectionMeta::ptr GetMetadata() const {
-    return connection_meta_;
+  bool IsRunnable() const {
+    return connection_meta_->IsRunnable();
   }
 
  private:
@@ -60,6 +63,5 @@ class Connection {
   websocketpp::lib::shared_ptr<websocketpp::lib::thread> thread_;
   ConnectionMeta::ptr connection_meta_;
 };
-
 
 #endif //TINYVCS_WEBSOCKET_CLIENT_H_

@@ -1,73 +1,80 @@
-#include <utility>
 #include <vector>
 #include <string>
 #include "fmt/core.h"
 #include "player.h"
+#include "websocket/client.h"
+#include "json/jsonbuilder.h"
 #include "glog/logging.h"
+#include "chain.h"
 
-class VideoStream {
- public:
-  explicit VideoStream(int stream_id, std::string rtsp_address, std::vector<std::string> subscriptions) : stream_id_(
-      stream_id), rtsp_address_(std::move(rtsp_address)), subscriptions_(std::move(subscriptions)) {
+void VideoStream::Run() {
+  std::thread t([this]() {
+    this->ReadImages();
+  });
+  threads_.push_back(std::move(t));
+}
 
-  }
-  ~VideoStream() {
-    for (std::thread &t : threads_) {
-      if (t.joinable()) {
-        t.join();
-      }
-    }
-  }
-
-  bool Open() {
-    player_ = std::make_shared<Player>(stream_id_, rtsp_address_);
-    bool open_success = player_->Open();
-    if (!open_success) {
+bool VideoStream::Open() {
+  player_ = std::make_shared<Player>(stream_id_, rtsp_address_);
+  bool open_success = player_->Open();
+  // open websockets
+  for (const std::string &subscription : subscriptions_) {
+    std::shared_ptr<Connection> connection = std::make_shared<Connection>();
+    bool is_open = connection->Connect(subscription);
+    if (!is_open) {
+      LOG(ERROR) << "Can not connect to " << subscription;
       return false;
+    } else {
+      connnections_.push_back(connection);
     }
-    player_->Run();
-    return true;
   }
-
-  void ReadImages() {
-    while (true) {
-      try {
-        Frame frame = player_->GetImage();
-        cv::Mat image = frame.image_;
-        if (!image.empty()) {
-          LOG(INFO) << fmt::format("image height:{} image width:{} pts:{} ",
-                                   image.size().height,
-                                   image.size().width,
-                                   frame.pts_);
+  if (!open_success) {
+    return false;
+  }
+  player_->Run();
+  return true;
+}
+void VideoStream::ReadImages() {
+  while (true) {
+    try {
+      Frame frame = player_->GetImage();
+      cv::Mat image = frame.image_;
+      if (!image.empty()) {
+        int height = image.size().height;
+        int width = image.size().width;
+        LOG(INFO) << fmt::format("image height:{} image width:{} pts:{} ",
+                                 height,
+                                 width,
+                                 frame.pts_);
+        std::map<std::string, std::variant<float, int, std::string>> values;
+        values.insert({"width", width});
+        values.insert({"height", height});
+        std::string json_res = create_json(values);
+        for (const auto &connection : this->connnections_) {
+          if (connection->IsRunnable()) {
+            bool send_success = connection->Send(json_res);
+            if (send_success) {
+            }
+          }
         }
       }
-      catch (SynchronizedVectorException &e) {
-        LOG(ERROR) << e.what();
-        if (player_->isRunnable()) {
-          LOG(WARNING) << "Decode process is exited";
-          break;
-        }
+    }
+    catch (SynchronizedVectorException &e) {
+      if (!player_->isRunnable()) {
+        LOG(ERROR) << "Decode packet process is exited with error";
+        break;
       }
     }
-    LOG(INFO) << "Read images process is exited!";
   }
-  void SendMessages() {
+  LOG(INFO) << "Read images process is exited!";
+}
 
-  }
+int main() {
+  std::vector<std::string> subscriptions;
+  subscriptions.push_back("ws://127.0.0.1:9002/");
+  VideoStream stream(0, "rtsp://127.0.0.1:8554/mystream", subscriptions);
+  bool b = stream.Open();
+  stream.Run();
+  return 0;
+}
 
-  void Inferences();
-
-  void Run() {
-    std::thread t([this]() {
-      this->ReadImages();
-    });
-    threads_.push_back(std::move(t));
-  }
-
- private:
-  int stream_id_ = 0;
-  std::string rtsp_address_;
-  std::vector<std::string> subscriptions_;
-  std::vector<std::thread> threads_;
-  std::shared_ptr<Player> player_;
-};
