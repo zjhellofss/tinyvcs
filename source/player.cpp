@@ -8,12 +8,12 @@
 #include "opencv2/opencv.hpp"
 #include "convert.h"
 #include "safevec.h"
+#include "frame.h"
 
 #include <string>
 #include <utility>
 #include <memory>
 #include <thread>
-#include <cassert>
 
 static int InterruptCallback(void *opaque);
 
@@ -35,7 +35,7 @@ static void FrameDeleter(AVFrame *frame) {
 
 void Player::ReadPackets() {
   while (true) {
-    if (!is_runable_) {
+    if (!is_runnable_) {
       break;
     }
     fmt_ctx_->interrupt_callback.callback = InterruptCallback;
@@ -84,22 +84,23 @@ void Player::ReadPackets() {
     LOG(INFO) << fmt::format("frame pts:{} width:{} height:{} ", frame->pts, frame->width, frame->height);
     frames_.Push(frame);
   }
-  is_runable_ = false;
+  is_runnable_ = false;
   LOG(INFO) << "Read packet process is exited!";
 }
 
 void Player::DecodePackets() {
+  int pts = 0;
   while (true) {
-    if (!is_runable_) {
+    if (!is_runnable_) {
       break;
     }
     std::shared_ptr<AVFrame> f_ops;
     try {
       f_ops = this->frames_.Pop();
     }
-    catch (std::exception &e) {
+    catch (SynchronizedVectorException &e) {
       LOG(ERROR) << e.what();
-      if (!is_runable_ && this->frames_.Empty()) {
+      if (!is_runnable_ && this->frames_.Empty()) {
         break;
       }
     }
@@ -113,7 +114,7 @@ void Player::DecodePackets() {
       int width = show_frame->width;
       int height = show_frame->height;
       if (width == 0 || height == 0 || width != dw_ || height != dh_) {
-        LOG(ERROR) << "Frame don't have correct size pts: "<<show_frame->pts;
+        LOG(ERROR) << "Frame don't have correct size pts: " << show_frame->pts;
         continue;
       }
       cv::Mat image4 = cv::Mat(height, width, CV_8UC4);
@@ -128,20 +129,24 @@ void Player::DecodePackets() {
                                 &image.data, linesize_);
         if (h < 0 || h != show_frame->height) {
           LOG(ERROR) << "sws scale convert failed " << show_frame->pts;
-        }
-        convert_success = true;
+          convert_success = false;
+        } else
+          convert_success = true;
       }
 
       if (convert_success) {
-        LOG(INFO) << "convert success";
+        Frame f(pts, image);
+        this->decoded_images_.Push(f);
+        pts += 1;
       }
     }
   }
-  is_runable_ = false;
+  is_runnable_ = false;
   LOG(INFO) << "Decode packet process is exited!";
 }
+
 void Player::Run() {
-  is_runable_ = true;
+  is_runnable_ = true;
   std::thread t1([this]() {
     this->ReadPackets();
   });
@@ -156,6 +161,7 @@ void Player::Run() {
 Player::Player(int stream_idx, std::string rtsp) : input_rtsp_(std::move(rtsp)), stream_idx_(stream_idx) {
 
 }
+
 bool Player::Open() {
   fmt_ctx_ = avformat_alloc_context();
   if (fmt_ctx_ == nullptr) {
@@ -305,6 +311,11 @@ Player::~Player() {
   }
 }
 
+Frame Player::GetImage() {
+  Frame f = this->decoded_images_.Pop();
+  return f;
+}
+
 static int InterruptCallback(void *opaque) {
   if (opaque == nullptr) return 0;
   Player *player = (Player *) opaque;
@@ -313,17 +324,5 @@ static int InterruptCallback(void *opaque) {
     LOG(ERROR) << s;
     return 1;
   }
-  return 0;
-}
-
-int main(int argc, char *argv[]) {
-  google::InitGoogleLogging(argv[0]);
-  FLAGS_log_dir = "./log";
-  FLAGS_alsologtostderr = true;
-  Player p(0, "rtsp://127.0.0.1:8554/mystream");
-  bool b = p.Open();
-  assert(b);
-  LOG(INFO) << "process start";
-  p.Run();
   return 0;
 }

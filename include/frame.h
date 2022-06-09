@@ -5,15 +5,10 @@
 #ifndef TINYVCS_INCLUDE_FRAME_H_
 #define TINYVCS_INCLUDE_FRAME_H_
 
-#include <cstdint>
-#include <utility>
-#include <memory>
-struct AVFrame;
+#include <opencv2/opencv.hpp>
 struct Frame {
- public:
-  explicit Frame(int stream_idx, int64_t pts, std::shared_ptr<AVFrame> frame);
-  std::shared_ptr<AVFrame> frame_ = nullptr;
-  int stream_idx_ = -1; ///获取摄像机的编号
-  int64_t pts_ = 0;
+  Frame(int pts, const cv::Mat &image);
+  int pts_ = 0;
+  cv::Mat image_;
 };
 #endif //TINYVCS_INCLUDE_FRAME_H_

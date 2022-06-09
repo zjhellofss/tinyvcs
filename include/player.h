@@ -6,9 +6,11 @@
 #define TINYVCS_INCLUDE_PLAYER_H_
 #include "safevec.h"
 #include "ffmpeg.h"
+#include "frame.h"
 #include <string>
 #include <vector>
 #include <thread>
+#include <opencv2/opencv.hpp>
 #include <atomic>
 
 class Player {
@@ -20,16 +22,21 @@ class Player {
 
   bool Open();
 
-  void ReadPackets(); ///
-
-  void DecodePackets(); ///
-
   void Run();
+
+  Frame GetImage();
 
  public:
   const std::string &GetRtsp() const {
     return this->input_rtsp_;
   }
+  bool isRunnable() const {
+    return this->is_runnable_;
+  }
+ private:
+  void ReadPackets(); ///
+
+  void DecodePackets(); ///
 
  private:
   std::vector<std::thread> threads_;
@@ -53,8 +60,9 @@ class Player {
   int dw_ = 0;
   int dh_ = 0;
   int stream_idx_ = 0;
-  std::atomic_bool is_runable_ = false;
+  std::atomic_bool is_runnable_ = false;
   SynchronizedVector<std::shared_ptr<AVFrame>> frames_;
+  SynchronizedVector<Frame> decoded_images_;
  public:
   int64_t block_starttime_ = time(nullptr);
   int64_t block_timeout_ = 10;

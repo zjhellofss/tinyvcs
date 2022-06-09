@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 include_directories(./include)
 link_directories(/usr/local/lib)
+link_directories(/usr/lib/x86_64-linux-gnu)
 
 ####ffmpeg#####
 find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
@@ -28,7 +29,7 @@ find_library(SWSCALE_LIBRARY swscale swscale)
 ###############
 
 ####glog#####
-find_package(glog 0.6.0 REQUIRED)
+include_directories(/usr/local/include/glog)
 ###############
 
 ####fmt#####
@@ -51,10 +52,15 @@ set(BOOST_INCLUDE_SUB_DIR  /usr/local/include/)
 include_directories(${BOOST_INCLUDE_DIR} ${BOOST_INCLUDE_SUB_DIR})
 ###############
 
-aux_source_directory(source/websocket DIR_WEBSOCKET_SRCS)
-aux_source_directory(source DIR_SRCS)
-set(ALL_SRCS ${DIR_SRCS} ${DIR_WEBSOCKET_SRCS})
 
+####json#####
+include_directories(/usr/local/include/nlohmann)
+#############
+
+aux_source_directory(source/websocket DIR_WEBSOCKET_SRCS)
+aux_source_directory(source/json DIR_JSON_SRCS)
+aux_source_directory(source DIR_SRCS)
+set(ALL_SRCS ${DIR_SRCS} ${DIR_WEBSOCKET_SRCS} ${DIR_JSON_SRCS})
 add_executable(tinyvcs ${ALL_SRCS})
 target_include_directories(tinyvcs PRIVATE ${SWSCALE_INCLUDE_DIR} ${AVCODEC_INCLUDE_DIR} ${AVFORMAT_INCLUDE_DIR} ${AVUTIL_INCLUDE_DIR} ${AVDEVICE_INCLUDE_DIR})
-target_link_libraries(tinyvcs PRIVATE boost_chrono boost_system boost_random swscale yuv ${SWSCALE_LIBRARY} ${OpenCV_LIBS} ${AVSWS_LIBRARY} ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${AVDEVICE_LIBRARY} pthread glog fmt)
+target_link_libraries(tinyvcs PRIVATE yuv  jpeg boost_chrono boost_system boost_random swscale  ${SWSCALE_LIBRARY} ${OpenCV_LIBS} ${AVSWS_LIBRARY} ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${AVDEVICE_LIBRARY} pthread glog fmt)
