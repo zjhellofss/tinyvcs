@@ -6,7 +6,6 @@
 #include "glog/logging.h"
 #include "fmt/core.h"
 #include "opencv2/opencv.hpp"
-#include "convert.h"
 #include "safevec.h"
 #include "frame.h"
 
@@ -52,16 +51,39 @@ void Player::ReadPackets() {
       av_make_error_string(err_msg, msg_len, ret);
       LOG(ERROR) << "Read paket error: " << err_msg;
       if (ret == AVERROR_EOF || avio_feof(fmt_ctx_->pb)) {
-        LOG(INFO) << "Media meet EOF";
+        LOG(WARNING) << "Media meet EOF";
       }
       break;
     }
     if (packet_raw->stream_index != video_stream_index_) {
       continue;
     }
-    LOG(INFO) << "packet pts: " << packet->pts;
+    frames_.Push(packet);
+  }
+  is_runnable_ = false;
+  LOG(INFO) << "Read packet process is exited!";
+}
 
-    ret = avcodec_send_packet(codec_ctx_, packet.get());
+void Player::DecodePackets() {
+  std::atomic_int pts = 0;
+  while (true) {
+    if (!is_runnable_) {
+      break;
+    }
+    std::shared_ptr<AVPacket> packet;
+    try {
+      packet = this->frames_.Pop();
+    }
+    catch (SynchronizedVectorException &e) {
+      LOG(ERROR) << e.what();
+      if (!is_runnable_ && this->frames_.Empty()) {
+        break;
+      }
+    }
+    if (!packet)
+      continue;
+
+    int ret = avcodec_send_packet(codec_ctx_, packet.get());
     if (ret != 0) {
       const int msg_len = 512;
       char err_msg[msg_len] = {0};
@@ -81,59 +103,27 @@ void Player::ReadPackets() {
         break;
       }
     }
-    LOG(INFO) << fmt::format("frame pts:{} width:{} height:{} ", frame->pts, frame->width, frame->height);
-    frames_.Push(frame);
-  }
-  is_runnable_ = false;
-  LOG(INFO) << "Read packet process is exited!";
-}
 
-void Player::DecodePackets() {
-  std::atomic_int pts = 0;
-  while (true) {
-    if (!is_runnable_) {
-      break;
-    }
-    std::shared_ptr<AVFrame> f_ops;
-    try {
-      f_ops = this->frames_.Pop();
-    }
-    catch (SynchronizedVectorException &e) {
-      LOG(ERROR) << e.what();
-      if (!is_runnable_ && this->frames_.Empty()) {
-        break;
-      }
-    }
-    if (!f_ops) {
+    if (!frame) {
+      LOG(ERROR) << "Read empty frame";
       continue;
-    } else {
-      AVFrame *show_frame = f_ops.get();
-      if (!show_frame) {
-        LOG(ERROR) << "Read empty frame";
-      }
-      int width = show_frame->width;
-      int height = show_frame->height;
-      if (width == 0 || height == 0 || width != dw_ || height != dh_) {
-        LOG(ERROR) << "Frame don't have correct size pts: " << show_frame->pts;
-        continue;
-      }
+    }
+    int width = frame->width;
+    int height = frame->height;
+    if (width == 0 || height == 0 || width != dw_ || height != dh_) {
+      LOG(ERROR) << "Frame don't have correct size pts: " << frame->pts;
+      continue;
+    }
 
-      cv::Mat image = cv::Mat(height, width, CV_8UC3);
-      const int h = sws_scale(sws_context_, show_frame->data, show_frame->linesize, 0, height,
-                              &image.data, linesize_);
-      if (h < 0 || h != show_frame->height) {
-        LOG(ERROR) << "sws scale convert failed " << show_frame->pts;
-      } else {
-        Frame f(pts, show_frame->pts, image);
-        cv::imwrite(fmt::format("./tmp/window_{}.jpg", f.pts_), f.image_);
-        LOG(INFO) << fmt::format("convert origin_pts:{} pts:{} width:{} height:{} ",
-                                 show_frame->pts,
-                                 pts,
-                                 show_frame->width,
-                                 show_frame->height);
-        this->decoded_images_.Push(f);
-        pts += 1;
-      }
+    cv::Mat image = cv::Mat(height, width, CV_8UC3);
+    const int h = sws_scale(sws_context_, frame->data, frame->linesize, 0, height,
+                            &image.data, linesize_);
+    if (h < 0 || h != frame->height) {
+      LOG(ERROR) << "sws scale convert failed " << frame->pts;
+    } else {
+      Frame f(pts, frame->pts, image);
+      this->decoded_images_.Push(f);
+      pts += 1;
     }
   }
   is_runnable_ = false;
@@ -160,7 +150,7 @@ Player::Player(int stream_idx, std::string rtsp) : input_rtsp_(std::move(rtsp)),
 bool Player::Open() {
   fmt_ctx_ = avformat_alloc_context();
   if (fmt_ctx_ == nullptr) {
-    LOG(INFO) << "avformat_alloc_context failed";
+    LOG(ERROR) << "avformat_alloc_context failed";
     return false;
   }
   av_dict_set(&fmt_opts_, "rtsp_transport", "tcp", 0);

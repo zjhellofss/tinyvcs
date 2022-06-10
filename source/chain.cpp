@@ -42,11 +42,6 @@ void VideoStream::ReadImages() {
       if (!image.empty()) {
         int height = image.size().height;
         int width = image.size().width;
-        LOG(INFO) << fmt::format("image height:{} image width:{} origin_pts:{} ",
-                                 height,
-                                 width,
-                                 frame.origin_pts_);
-
         vmaps values;
         values.insert({"pts", frame.pts_});
         values.insert({"width", width});

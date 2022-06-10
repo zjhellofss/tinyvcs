@@ -7,11 +7,10 @@
 
 #include <mutex>
 #include <optional>
-#include <deque>
 #include <condition_variable>
 
 #include <mutex>
-#include <stack>
+#include <queue>
 #include <atomic>
 #include <condition_variable>
 #include <chrono>
@@ -37,7 +36,7 @@ class SynchronizedVector {
   bool Full();
  private:
   std::mutex mutex_;
-  std::stack<T> elems_{};
+  std::queue<T> elems_{};
   std::atomic<int> stack_size_;
   std::condition_variable cond_;
 };
@@ -63,7 +62,7 @@ T SynchronizedVector<T>::Pop() {
     return this->elems_.size() > 0;
   });
   if (wait_success) {
-    T elem = this->elems_.top();
+    T elem = this->elems_.front();
     this->elems_.pop();
     this->cond_.notify_one();
     return elem;

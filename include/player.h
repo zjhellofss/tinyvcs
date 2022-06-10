@@ -61,7 +61,7 @@ class Player {
   int dh_ = 0;
   int stream_idx_ = 0;
   std::atomic_bool is_runnable_ = false;
-  SynchronizedVector<std::shared_ptr<AVFrame>> frames_;
+  SynchronizedVector<std::shared_ptr<AVPacket>> frames_;
   SynchronizedVector<Frame> decoded_images_;
  public:
   int64_t block_starttime_ = time(nullptr);
