@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 3.22)
 project(tinyvcs)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_BUILD_TYPE Debug)
-#set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 #set(CMAKE_CXX_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_FLAGS "-O0")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 include_directories(./include)
 link_directories(/usr/local/lib)
@@ -57,10 +57,15 @@ include_directories(${BOOST_INCLUDE_DIR} ${BOOST_INCLUDE_SUB_DIR})
 include_directories(/usr/local/include/nlohmann)
 #############
 
+####benchmark####
+find_package(benchmark REQUIRED)
+#################
+
 find_package(CUDA REQUIRED)
 find_package(ZLIB REQUIRED)
 
-####json#####
+
+####tensorrt#####
 find_library(LIBNVINFER NAME nvinfer HINTS ${TENSORRT_LIB_PATH} REQUIRED)
 find_library(LIBNVINFER_PLUGIN NAME nvinfer_plugin HINTS ${TENSORRT_LIB_PATH} REQUIRED)
 find_library(LIBNVPARSERS NAME nvparsers HINTS ${TENSORRT_LIB_PATH} REQUIRED)
@@ -110,5 +115,5 @@ aux_source_directory(source/tensorrt DIR_TENSOR_SRCS)
 aux_source_directory(source DIR_SRCS)
 set(ALL_SRCS ${DIR_SRCS} ${DIR_WEBSOCKET_SRCS} ${DIR_JSON_SRCS} ${DIR_TENSOR_SRCS} ${SAMPLE_SRCS} samples/engine_test.cpp)
 add_executable(tinyvcs ${ALL_SRCS})
-target_include_directories(tinyvcs PRIVATE ${SWSCALE_INCLUDE_DIR} ${AVCODEC_INCLUDE_DIR} ${AVFORMAT_INCLUDE_DIR} ${AVUTIL_INCLUDE_DIR} ${AVDEVICE_INCLUDE_DIR})
-target_link_libraries(tinyvcs PRIVATE ${LIBNVONNXPARSER} cudart ${ZLIB_LIBRARIES} ${LIBNVINFER} ${LIBNVINFER_PLUGIN} ${LIBNVPARSERS} yuv jpeg boost_chrono boost_system boost_random swscale ${SWSCALE_LIBRARY} ${OpenCV_LIBS} ${AVSWS_LIBRARY} ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${AVDEVICE_LIBRARY} pthread glog fmt)
+target_include_directories(tinyvcs PRIVATE n ${SWSCALE_INCLUDE_DIR} ${AVCODEC_INCLUDE_DIR} ${AVFORMAT_INCLUDE_DIR} ${AVUTIL_INCLUDE_DIR} ${AVDEVICE_INCLUDE_DIR})
+target_link_libraries(tinyvcs PRIVATE  benchmark::benchmark benchmark::benchmark_main ${LIBNVONNXPARSER} cudart ${ZLIB_LIBRARIES} ${LIBNVINFER} ${LIBNVINFER_PLUGIN} ${LIBNVPARSERS} yuv jpeg boost_chrono boost_system boost_random swscale ${SWSCALE_LIBRARY} ${OpenCV_LIBS} ${AVSWS_LIBRARY} ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${AVDEVICE_LIBRARY} pthread glog fmt)

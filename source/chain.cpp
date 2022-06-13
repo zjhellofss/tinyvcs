@@ -177,7 +177,7 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
     for (auto it = begin; it != begin + elements_in_one_batch_; it += num_classes_ + 5) {
       float cls_conf = it[4];
 
-      if (cls_conf > 0.2) {
+      if (cls_conf > conf_thresh) {
         int centerX = (int) (it[0]);
         int centerY = (int) (it[1]);
         int width = (int) (it[2]);

@@ -124,8 +124,8 @@ Trt::~Trt() {
   LOG(INFO) << "destroy Trt instance";
 
   profile_ = nullptr;
-  for (size_t i = 0; i < binding_.size(); i++) {
-    safeCudaFree(binding_[i]);
+  for (auto & i : binding_) {
+    safeCudaFree(i);
   }
 }
 
@@ -289,7 +289,7 @@ void Trt::SetBindingDimensions(std::vector<int> &input_dims, int bind_index) {
 
 void Trt::CopyFromHostToDevice(const std::vector<float> &input,
                                int bind_index, const cudaStream_t &stream) {
-  LOG(INFO) << fmt::format("input size: {}, binding size: {}", input.size() * sizeof(float), binding_size_[bind_index]);
+//  LOG(INFO) << fmt::format("input size: {}, binding size: {}", input.size() * sizeof(float), binding_size_[bind_index]);
   CUDA_CHECK(cudaMemcpyAsync(binding_[bind_index], input.data(),
                              input.size() * sizeof(float), cudaMemcpyHostToDevice, stream));
 }
