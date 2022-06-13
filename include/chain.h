@@ -7,8 +7,18 @@
 #include <string>
 #include <vector>
 #include <thread>
+
 #include "websocket/client.h"
+
+#include "tensorrt/engine.h"
 #include "player.h"
+
+struct Detection {
+  cv::Rect box;
+  float conf{};
+  int class_id{};
+};
+
 
 class VideoStream {
  public:
@@ -41,6 +51,35 @@ class VideoStream {
   std::vector<std::thread> threads_;
   std::vector<std::shared_ptr<Connection>> connnections_;
   std::shared_ptr<Player> player_;
+};
+
+class Inference {
+ public:
+  Inference(std::string onnx_file, std::string engine_file, int device, bool enable_fp16)
+      : onnx_file_(std::move(onnx_file)),
+        engine_file_(std::move(engine_file)),
+        device_(device),
+        enable_fp16_(enable_fp16) {
+
+  }
+  void Init() ;
+
+  std::vector<std::vector<Detection>> Infer(const std::vector<cv::Mat> &images, float conf_thresh, float iou_thresh) ;
+
+ private:
+  std::unique_ptr<Trt> onnx_net_;
+  std::string onnx_file_;
+  std::string engine_file_;
+  bool enable_fp16_ = false;
+  int device_ = 0;
+  int batch_ = 0;
+  int num_classes_ = 0;
+  int elements_in_one_batch_ = 0;
+  int elements_in_all_batch_ = 0;
+  int output_binding_ = 0;
+  int input_binding_ = 0;
+  nvinfer1::Dims input_dims_;
+  nvinfer1::Dims output_dims_;
 };
 
 #endif //TINYVCS_INCLUDE_CHAIN_H_
