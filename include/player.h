@@ -4,14 +4,15 @@
 
 #ifndef TINYVCS_INCLUDE_PLAYER_H_
 #define TINYVCS_INCLUDE_PLAYER_H_
-#include "safevec.h"
-#include "ffmpeg.h"
-#include "frame.h"
 #include <string>
 #include <vector>
 #include <thread>
 #include <opencv2/opencv.hpp>
 #include <atomic>
+
+#include "safevec.h"
+#include "ffmpeg.h"
+#include "frame.h"
 
 class Player {
 
@@ -30,7 +31,7 @@ class Player {
   const std::string &GetRtsp() const {
     return this->input_rtsp_;
   }
-  bool isRunnable() const {
+  bool IsRunnable() const {
     return this->is_runnable_;
   }
  private:

@@ -1,18 +1,19 @@
 //
 // Created by fss on 22-6-6.
 //
-#include "ffmpeg.h"
 #include "player.h"
-#include "glog/logging.h"
-#include "fmt/core.h"
-#include "opencv2/opencv.hpp"
-#include "safevec.h"
-#include "frame.h"
-
 #include <string>
 #include <utility>
 #include <memory>
 #include <thread>
+
+#include "glog/logging.h"
+#include "fmt/core.h"
+#include "opencv2/opencv.hpp"
+
+#include "ffmpeg.h"
+#include "safevec.h"
+#include "frame.h"
 
 static int InterruptCallback(void *opaque);
 
@@ -59,6 +60,7 @@ void Player::ReadPackets() {
       continue;
     }
     frames_.Push(packet);
+    LOG(INFO) << fmt::format("Read packet {} pts completely!", packet->pts);
   }
   is_runnable_ = false;
   LOG(INFO) << "Read packet process is exited!";
@@ -66,7 +68,10 @@ void Player::ReadPackets() {
 
 void Player::DecodePackets() {
   std::atomic_int pts = 0;
+  std::shared_ptr<AVFrame> frame = std::shared_ptr<AVFrame>(av_frame_alloc(), FrameDeleter);
+
   while (true) {
+    av_frame_unref(frame.get());
     if (!is_runnable_) {
       break;
     }
@@ -92,7 +97,6 @@ void Player::DecodePackets() {
       break;
     }
 
-    std::shared_ptr<AVFrame> frame = std::shared_ptr<AVFrame>(av_frame_alloc(), FrameDeleter);
     ret = avcodec_receive_frame(codec_ctx_, frame.get());
     if (ret != 0) {
       const int msg_len = 512;
@@ -118,10 +122,12 @@ void Player::DecodePackets() {
     cv::Mat image = cv::Mat(height, width, CV_8UC3);
     const int h = sws_scale(sws_context_, frame->data, frame->linesize, 0, height,
                             &image.data, linesize_);
+
     if (h < 0 || h != frame->height) {
       LOG(ERROR) << "sws scale convert failed " << frame->pts;
     } else {
       Frame f(pts, frame->pts, image);
+      LOG(INFO) << fmt::format("Decode frame {} pts completely!", frame->pts);
       this->decoded_images_.Push(f);
       pts += 1;
     }

@@ -10,7 +10,7 @@ std::string create_json(const vmaps &kvs) {
   for (const auto &iter : kvs) {
     std::visit([&](const auto &val) {
       using T = std::decay_t<decltype(val)>;
-      if constexpr (std::is_same_v<T, int> || std::is_same_v<T, int> || std::is_same_v<T, std::string>) {
+      if constexpr (std::is_arithmetic_v<T> || std::is_same_v<T, std::string>) {
         j[iter.first] = val;
       } else {
         LOG(ERROR) << "Error format in json";

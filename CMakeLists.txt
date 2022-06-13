@@ -57,10 +57,48 @@ include_directories(${BOOST_INCLUDE_DIR} ${BOOST_INCLUDE_SUB_DIR})
 include_directories(/usr/local/include/nlohmann)
 #############
 
+find_package(CUDA REQUIRED)
+find_package(ZLIB REQUIRED)
+
+####json#####
+find_library(LIBNVINFER NAME nvinfer HINTS ${TENSORRT_LIB_PATH} REQUIRED)
+find_library(LIBNVINFER_PLUGIN NAME nvinfer_plugin HINTS ${TENSORRT_LIB_PATH} REQUIRED)
+find_library(LIBNVPARSERS NAME nvparsers HINTS ${TENSORRT_LIB_PATH} REQUIRED)
+find_library(LIBNVONNXPARSER NAME nvonnxparser HINTS ${TENSORRT_LIB_PATH} REQUIRED)
+
+find_path(TENSORRT_INCLUDE_DIR NvInfer.h
+        HINTS ${TENSORRT_INCLUDE_PATH})
+
+include(cmake/CUDA_utils.cmake)
+
+if(GPU_ARCH)
+    set(CUDA_targeted_archs ${GPU_ARCH})
+    CUDA_get_gencode_args(CUDA_gencode_flags ${CUDA_targeted_archs})
+else()
+    # Discover what architectures does nvcc support
+    CUDA_find_supported_arch_values(CUDA_supported_archs ${CUDA_known_archs})
+    set(CUDA_TARGET_ARCHS_SORTED ${CUDA_TARGET_ARCHS})
+    list(SORT CUDA_TARGET_ARCHS_SORTED)
+    CUDA_find_supported_arch_values(CUDA_targeted_archs ${CUDA_TARGET_ARCHS_SORTED})
+    if (NOT CUDA_targeted_archs)
+        message(FATAL_ERROR "None of the provided CUDA architectures ({${CUDA_TARGET_ARCHS}}) \
+      is supported by nvcc, please set appropriate arch via -DGPU_ARCH=XX")
+    endif()
+    CUDA_get_gencode_args(CUDA_gencode_flags ${CUDA_targeted_archs})
+endif()
+
+# Add ptx & bin flags for cuda
+set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} ${CUDA_gencode_flags}")
+include_directories(${ZLIB_INCLUDE_DIRS})
+include_directories(${TENSORRT_INCLUDE_DIR})
+include_directories(/usr/local/cuda-10.2/include)
+
+
 aux_source_directory(source/websocket DIR_WEBSOCKET_SRCS)
 aux_source_directory(source/json DIR_JSON_SRCS)
+aux_source_directory(source/tensorrt DIR_TENSOR_SRCS)
 aux_source_directory(source DIR_SRCS)
-set(ALL_SRCS ${DIR_SRCS} ${DIR_WEBSOCKET_SRCS} ${DIR_JSON_SRCS} ${SAMPLE_SRCS} samples/main.cpp)
+set(ALL_SRCS ${DIR_SRCS} ${DIR_WEBSOCKET_SRCS} ${DIR_JSON_SRCS} ${DIR_TENSOR_SRCS} ${SAMPLE_SRCS} samples/main.cpp)
 add_executable(tinyvcs ${ALL_SRCS})
 target_include_directories(tinyvcs PRIVATE ${SWSCALE_INCLUDE_DIR} ${AVCODEC_INCLUDE_DIR} ${AVFORMAT_INCLUDE_DIR} ${AVUTIL_INCLUDE_DIR} ${AVDEVICE_INCLUDE_DIR})
-target_link_libraries(tinyvcs PRIVATE yuv  jpeg boost_chrono boost_system boost_random swscale  ${SWSCALE_LIBRARY} ${OpenCV_LIBS} ${AVSWS_LIBRARY} ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${AVDEVICE_LIBRARY} pthread glog fmt)
+target_link_libraries(tinyvcs PRIVATE ${LIBNVONNXPARSER}  ${ZLIB_LIBRARIES} ${LIBNVINFER}  ${LIBNVINFER_PLUGIN} ${LIBNVPARSERS} yuv  jpeg boost_chrono boost_system boost_random swscale  ${SWSCALE_LIBRARY} ${OpenCV_LIBS} ${AVSWS_LIBRARY} ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${AVDEVICE_LIBRARY} pthread glog fmt)

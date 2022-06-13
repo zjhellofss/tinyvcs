@@ -57,7 +57,7 @@ void VideoStream::ReadImages() {
       }
     }
     catch (SynchronizedVectorException &e) {
-      if (!player_->isRunnable()) {
+      if (!player_->IsRunnable()) {
         LOG(ERROR) << "Decode packet process is exited with error";
         break;
       }
