@@ -12,6 +12,8 @@
 #include "NvInferVersion.h"
 #include "cuda_runtime.h"
 
+
+
 template<typename T>
 struct TrtDestroyer {
   void operator()(T *t) {
@@ -31,6 +33,14 @@ class TrtLogger : public nvinfer1::ILogger {
 
   Severity severity_ = Severity::kINFO;
 };
+
+void SetDevice(int device);
+
+int GetDevice() ;
+
+bool setTensorDynamicRange(const nvinfer1::INetworkDefinition &network, float in_range, float out_range) ;
+
+void SaveEngine(const std::string &fileName, TrtUniquePtr<nvinfer1::IHostMemory> &plan) ;
 
 class Trt {
  public:

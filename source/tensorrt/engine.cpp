@@ -115,7 +115,7 @@ Trt::Trt() {
   config_.reset(builder_->createBuilderConfig());
   LOG_IF(FATAL, config_ == nullptr) << "create trt builder config failed";
 
-  config_->setMaxWorkspaceSize(1 << 30); // 1GB
+  config_->setMaxWorkspaceSize((1 << 30)); // 1GB
   profile_ = builder_->createOptimizationProfile();
   LOG_IF(FATAL, profile_ == nullptr) << "create trt builder optimazation profile failed";
 }
@@ -371,9 +371,9 @@ void Trt::CreateDeviceBuffer() {
     LOG(INFO) << "\b\b  ";
     binding_[i] = safeCudaMalloc(totalSize);
     if (engine_->bindingIsInput(i)) {
-      nb_input_bindings_++;
+      nb_input_bindings_ = i;
     } else {
-      nb_output_bindings_++;
+      nb_output_bindings_ = i;
     }
   }
 }
