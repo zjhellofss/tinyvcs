@@ -130,7 +130,7 @@ Trt::~Trt() {
 }
 
 void Trt::EnableFP16() {
-  assert(builder_ != nullptr && config_ != nullptr && "Please set config before build engine");
+  LOG_IF(FATAL, !builder_ && !config_) << "please set config before build engine";
   LOG(INFO) << "enable FP16";
 
   if (!builder_->platformHasFastFp16()) {
@@ -140,7 +140,7 @@ void Trt::EnableFP16() {
 }
 
 void Trt::EnableINT8() {
-  assert(builder_ != nullptr && config_ != nullptr && "Please set config before build engine");
+  LOG_IF(FATAL, !builder_ && !config_) << "please set config before build engine";
   LOG(INFO) << "enable int8, call SetInt8Calibrator to set int8 calibrator";
   if (!builder_->platformHasFastInt8()) {
     LOG(WARNING) << "the platform doesn't have native int8 support";
@@ -149,25 +149,25 @@ void Trt::EnableINT8() {
 }
 
 void Trt::SetWorkpaceSize(size_t workspaceSize) {
-  assert(builder_ != nullptr && config_ != nullptr && "Please set config before build engine");
+  LOG_IF(FATAL, !builder_ && !config_) << "please set config before build engine";
   config_->setMaxWorkspaceSize(workspaceSize);
   LOG(INFO) << fmt::format("set max workspace size: {}", config_->getMaxWorkspaceSize());
 }
 
-void Trt::SetDLACore(int dlaCore) {
-  assert(builder_ != nullptr && config_ != nullptr && "Please set config before build engine");
-  LOG(INFO) << fmt::format("set dla core {}", dlaCore);
-  if (dlaCore >= 0) {
+void Trt::SetDLACore(int dla_core) {
+  LOG_IF(FATAL, !builder_ && !config_) << "please set config before build engine";
+  LOG(INFO) << fmt::format("set dla core {}", dla_core);
+  if (dla_core >= 0) {
     config_->setDefaultDeviceType(nvinfer1::DeviceType::kDLA);
-    config_->setDLACore(dlaCore);
+    config_->setDLACore(dla_core);
     config_->setFlag(nvinfer1::BuilderFlag::kGPU_FALLBACK);
   }
 }
 
-void Trt::SetCustomOutput(const std::vector<std::string> &customOutputs) {
-  assert(builder_ != nullptr && config_ != nullptr && "Please set config before build engine");
+void Trt::SetCustomOutput(const std::vector<std::string> &custom_outputs) {
+  LOG_IF(FATAL, !builder_ && !config_) << "please set config before build engine";
   LOG(INFO) << "set custom output";
-  custom_outputs_ = customOutputs;
+  custom_outputs_ = custom_outputs;
 }
 
 void Trt::SetLogLevel(int severity) {
