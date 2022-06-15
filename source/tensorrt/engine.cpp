@@ -180,19 +180,19 @@ void Trt::AddDynamicShapeProfile(const std::string &input_name,
                                  const std::vector<int> &opt_dim_vec,
                                  const std::vector<int> &maxDimVec) {
   LOG(INFO) << fmt::format("add profile for {}", input_name);
-  nvinfer1::Dims minDim, optDim, maxDim;
+  nvinfer1::Dims min_dim, opt_dim, max_dim;
   int nbDims = opt_dim_vec.size();
-  minDim.nbDims = nbDims;
-  optDim.nbDims = nbDims;
-  maxDim.nbDims = nbDims;
+  min_dim.nbDims = nbDims;
+  opt_dim.nbDims = nbDims;
+  max_dim.nbDims = nbDims;
   for (int i = 0; i < nbDims; i++) {
-    minDim.d[i] = min_dim_vec[i];
-    optDim.d[i] = opt_dim_vec[i];
-    maxDim.d[i] = maxDimVec[i];
+    min_dim.d[i] = min_dim_vec[i];
+    opt_dim.d[i] = opt_dim_vec[i];
+    max_dim.d[i] = maxDimVec[i];
   }
-  profile_->setDimensions(input_name.c_str(), nvinfer1::OptProfileSelector::kMIN, minDim);
-  profile_->setDimensions(input_name.c_str(), nvinfer1::OptProfileSelector::kOPT, optDim);
-  profile_->setDimensions(input_name.c_str(), nvinfer1::OptProfileSelector::kMAX, maxDim);
+  profile_->setDimensions(input_name.c_str(), nvinfer1::OptProfileSelector::kMIN, min_dim);
+  profile_->setDimensions(input_name.c_str(), nvinfer1::OptProfileSelector::kOPT, opt_dim);
+  profile_->setDimensions(input_name.c_str(), nvinfer1::OptProfileSelector::kMAX, max_dim);
   is_dynamic_shape_ = true;
 }
 
@@ -369,10 +369,11 @@ void Trt::CreateDeviceBuffer() {
       LOG(INFO) << dims.d[j] << " x ";
     }
     LOG(INFO) << "\b\b  ";
-    binding_[i] = safeCudaMalloc(totalSize);
     if (engine_->bindingIsInput(i)) {
+      binding_[i] = safeCudaMalloc(totalSize);
       nb_input_bindings_ = i;
     } else {
+      binding_[i] = safeCudaMalloc(totalSize);
       nb_output_bindings_ = i;
     }
   }

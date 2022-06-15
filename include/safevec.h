@@ -35,6 +35,7 @@ class SynchronizedVector {
   T Pop();
   bool Empty();
   bool Full();
+  size_t Size();
  private:
   std::mutex mutex_;
   std::queue<T> elems_{};
@@ -94,6 +95,12 @@ bool SynchronizedVector<T>::Full() {
     this->mutex_.unlock();
     return false;
   }
+}
+template<class T>
+size_t SynchronizedVector<T>::Size() {
+  auto lock = std::unique_lock<std::mutex>(this->mutex_);
+  size_t sz = this->elems_.size();
+  return sz;
 }
 
 #endif //TINYVCS_INCLUDE_SAFEVEC_H_

@@ -14,6 +14,7 @@
 #include "ffmpeg.h"
 #include "safevec.h"
 #include "frame.h"
+#include "image_utils.h"
 
 static int InterruptCallback(void *opaque);
 
@@ -69,6 +70,7 @@ void Player::ReadPackets() {
 void Player::DecodePackets() {
   std::atomic_int pts = 0;
   std::shared_ptr<AVFrame> frame = std::shared_ptr<AVFrame>(av_frame_alloc(), FrameDeleter);
+  cv::Mat image = cv::Mat(this->dh_, this->dw_, CV_8UC3);
 
   while (true) {
     av_frame_unref(frame.get());
@@ -119,14 +121,15 @@ void Player::DecodePackets() {
       continue;
     }
 
-    cv::Mat image = cv::Mat(height, width, CV_8UC3);
     const int h = sws_scale(sws_context_, frame->data, frame->linesize, 0, height,
                             &image.data, linesize_);
 
     if (h < 0 || h != frame->height) {
       LOG(ERROR) << "sws scale convert failed " << frame->pts;
     } else {
-      Frame f(pts, frame->pts, image);
+      cv::Mat output_image;
+      letterbox(image, output_image);
+      Frame f(pts, frame->pts, output_image);
       LOG(INFO) << fmt::format("Decode frame {} pts completely!", frame->pts);
       this->decoded_images_.Push(f);
       pts += 1;

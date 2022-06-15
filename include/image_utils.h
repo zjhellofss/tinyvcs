@@ -10,8 +10,8 @@ void letterbox(const cv::Mat &image, cv::Mat &out_image,
                const cv::Size &new_shape = cv::Size(640, 640),
                const cv::Scalar &color = cv::Scalar(114, 114, 114),
                bool auto_ = false,
-               bool scaleFill = false,
-               bool scaleUp = true,
+               bool scale_fill = false,
+               bool scale_up = true,
                int stride = 32);
 
 size_t vectorProduct(const std::vector<int64_t> &vector);

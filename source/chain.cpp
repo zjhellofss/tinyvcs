@@ -8,6 +8,7 @@
 #include "websocket/client.h"
 #include "json/jsonbuilder.h"
 #include "glog/logging.h"
+#include "tick.h"
 
 #include "player.h"
 #include "tensorrt/engine.h"
@@ -40,10 +41,15 @@ void getBestClassInfo(std::vector<float>::iterator it, const int &num_classes,
 }
 
 void VideoStream::Run() {
-  std::thread t([this]() {
+  std::thread t1([this]() {
     this->ReadImages();
   });
-  threads_.push_back(std::move(t));
+  threads_.push_back(std::move(t1));
+
+  std::thread t2([this]() {
+    this->Infer();
+  });
+  threads_.push_back(std::move(t2));
 }
 
 bool VideoStream::Open() {
@@ -66,36 +72,55 @@ bool VideoStream::Open() {
   player_->Run();
   return true;
 }
-void VideoStream::ReadImages() {
+
+void VideoStream::Infer() {
+  std::vector<cv::Mat> images;
   while (true) {
     try {
-      Frame frame = player_->GetImage();
-      cv::Mat image = frame.image_;
-      if (!image.empty()) {
-        int height = image.size().height;
-        int width = image.size().width;
-        vmaps values;
-        values.insert({"pts", frame.pts_});
-        values.insert({"width", width});
-        values.insert({"height", height});
-        std::string json_res = create_json(values);
-        for (const auto &connection : this->connnections_) {
-          if (connection->IsRunnable()) {
-            bool send_success = connection->Send(json_res);
-            if (send_success) {
-            }
-          }
+      Frame f = frames_.Pop();
+      if (this->inference_) {
+        images.push_back(f.image_);
+        if (images.size() == batch_) {
+          inference_->Infer(images, 0.2f, 0.2f);
+          LOG(INFO) << "stream id: " << stream_id_ << " remain frames: " << frames_.Size();
+          images.clear();
         }
       }
     }
     catch (SynchronizedVectorException &e) {
       if (!player_->IsRunnable()) {
-        LOG(ERROR) << "Decode packet process is exited with error";
+        LOG(ERROR) << "video stream infer function exits!";
         break;
       }
     }
   }
+}
+
+void VideoStream::ReadImages() {
+  uint64_t index_frame = 0;
+  while (true) {
+    try {
+      Frame frame = player_->GetImage();
+      if (this->inference_) {
+        if (index_frame % duration_ == 0) {
+          frames_.Push(frame);
+        }
+      }
+    } catch (SynchronizedVectorException &e) {
+      if (!player_->IsRunnable()) {
+        LOG(ERROR) << "video stream read image function exits!";
+        break;
+      }
+    }
+    index_frame += 1;
+  }
   LOG(INFO) << "Read images process is exited!";
+}
+
+void VideoStream::set_inference(size_t batch, const std::string &engine_file) {
+  batch_ = batch;
+  this->inference_ = std::make_unique<Inference>("", engine_file, 0, true);
+  this->inference_->Init();
 }
 
 void Inference::Init() {
@@ -140,13 +165,11 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
   }
   std::vector<std::vector<float>> input_tensor_values_all;
   for (int i = 0; i < batch_; ++i) {
-    cv::Mat resized_image;
     const cv::Mat &image = images.at(i);
     LOG_IF(FATAL, image.empty()) << "has empty image";
-    letterbox(image, resized_image);
 
     cv::Mat float_image;
-    resized_image.convertTo(float_image, CV_32FC3, 1 / 255.0);
+    image.convertTo(float_image, CV_32FC3, 1 / 255.0);
     std::shared_ptr<float>
         blob = std::shared_ptr<float>(new float[float_image.cols * float_image.rows * float_image.channels()]);
     cv::Size float_image_size{float_image.cols, float_image.rows};
@@ -168,7 +191,6 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
   onnx_net_->CopyFromHostToDevice(input, input_binding_);
   onnx_net_->Forward();
   onnx_net_->CopyFromDeviceToHost(output, output_binding_);
-
   for (int i = 0; i < batch_; ++i) {
     std::vector<cv::Rect> boxes;
     std::vector<float> confs;

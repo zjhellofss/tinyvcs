@@ -6,13 +6,13 @@ void letterbox(const cv::Mat &image, cv::Mat &out_image,
                const cv::Size &new_shape,
                const cv::Scalar &color,
                bool auto_ ,
-               bool scaleFill ,
-               bool scaleUp ,
+               bool scale_fill ,
+               bool scale_up ,
                int stride) {
   cv::Size shape = image.size();
   float r = std::min((float) new_shape.height / (float) shape.height,
                      (float) new_shape.width / (float) shape.width);
-  if (!scaleUp)
+  if (!scale_up)
     r = std::min(r, 1.0f);
 
   float ratio[2]{r, r};
@@ -25,7 +25,7 @@ void letterbox(const cv::Mat &image, cv::Mat &out_image,
   if (auto_) {
     dw = (float) ((int) dw % stride);
     dh = (float) ((int) dh % stride);
-  } else if (scaleFill) {
+  } else if (scale_fill) {
     dw = 0.0f;
     dh = 0.0f;
     new_unpad[0] = new_shape.width;
