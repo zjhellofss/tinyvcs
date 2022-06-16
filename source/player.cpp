@@ -13,7 +13,6 @@
 #include "tick.h"
 
 #include "ffmpeg.h"
-#include "safevec.h"
 #include "frame.h"
 #include "image_utils.h"
 #include "convert.h"
@@ -128,13 +127,11 @@ void Player::DecodePackets() {
     AVFrame *tmp_frame;
 
     if (Player::hwformat_ != AVPixelFormat::AV_PIX_FMT_NONE && frame->format == Player::hwformat_) {
-      TICK(TRANSFER)
       if (av_hwframe_transfer_data(sw_frame.get(), (const AVFrame *) frame.get(), 0) < 0) {
         LOG(ERROR) << "Error transferring the data to system memory";
       } else {
         tmp_frame = sw_frame.get();
       }
-      TOCK(TRANSFER)
     } else {
       tmp_frame = frame.get();
     }
@@ -146,9 +143,7 @@ void Player::DecodePackets() {
 
 //    const int h = sws_scale(sws_context_, frame->data, frame->linesize, 0, height,
 //                            &image.data, linesize_);
-    TICK(CONVERT)
     bool convert_success = Convert(tmp_frame, image);
-    TOCK(CONVERT)
     if (!convert_success) {
       LOG(ERROR) << "sws scale convert failed " << tmp_frame->pts;
     } else {

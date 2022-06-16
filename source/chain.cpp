@@ -46,10 +46,12 @@ void VideoStream::Run() {
   });
   threads_.push_back(std::move(t1));
 
-  std::thread t2([this]() {
-    this->Infer();
-  });
-  threads_.push_back(std::move(t2));
+  if(this->inference_){
+    std::thread t2([this]() {
+      this->Infer();
+    });
+    threads_.push_back(std::move(t2));
+  }
 }
 
 bool VideoStream::Open() {
@@ -81,7 +83,6 @@ void VideoStream::Infer() {
         Frame f;
         bool read_success = frames_.pop(f);
         if (read_success) {
-
           images.push_back(f.image_);
           break;
         }
@@ -109,13 +110,15 @@ void VideoStream::Infer() {
 
 void VideoStream::ReadImages() {
   uint64_t index_frame = 0;
-  cv::namedWindow("window");
+  cv::namedWindow("window" + std::to_string(stream_id_));
 
   while (true) {
     std::optional<Frame> frame_opt = player_->get_image();
     if (frame_opt.has_value()) {
-      cv::imshow("window", frame_opt.value().image_);
-      cv::waitKey(50);
+      auto image = frame_opt.value().image_;
+      cv::resize(image, image, cv::Size(640, 640));
+      cv::imshow("window" + std::to_string(stream_id_), image);
+      cv::waitKey(15);
 
       index_frame += 1;
       if (index_frame % duration_ == 0) {
@@ -129,7 +132,7 @@ void VideoStream::ReadImages() {
         break;
     }
   }
-  LOG(INFO) << "Read images process is exited!";
+  LOG(INFO) << "read images process is exited!";
   cv::destroyAllWindows();
 }
 

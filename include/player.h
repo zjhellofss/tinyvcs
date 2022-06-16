@@ -11,7 +11,6 @@
 #include <boost/lockfree/spsc_queue.hpp>
 #include <atomic>
 
-#include "safevec.h"
 #include "ffmpeg.h"
 #include "frame.h"
 
