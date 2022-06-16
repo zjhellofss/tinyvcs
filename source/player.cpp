@@ -96,7 +96,6 @@ void Player::DecodePackets() {
       break;
     }
 
-    TICK(DECODE)
     int ret = avcodec_send_packet(codec_ctx_, packet.get());
     if (ret != 0) {
       const int msg_len = 512;
@@ -155,7 +154,6 @@ void Player::DecodePackets() {
       LOG(INFO) << fmt::format("stream id {} decode frame {} pts completely!", stream_idx_, tmp_frame->pts);
       pts += 1;
     }
-    TOCK(DECODE)
   }
 
   is_runnable_ = false;

@@ -6,6 +6,7 @@
 
 #include "fmt/core.h"
 #include "websocket/client.h"
+#include "boost/range/combine.hpp"
 #include "json/jsonbuilder.h"
 #include "glog/logging.h"
 #include "tick.h"
@@ -46,7 +47,7 @@ void VideoStream::Run() {
   });
   threads_.push_back(std::move(t1));
 
-  if(this->inference_){
+  if (this->inference_) {
     std::thread t2([this]() {
       this->Infer();
     });
@@ -98,8 +99,20 @@ void VideoStream::Infer() {
     }
 
     if (inference_ && images.size() == batch_) {
-      inference_->Infer(images, 0.2f, 0.2f);
-      LOG(INFO) << "stream id: " << stream_id_ << " remain frames: " << 1024 - frames_.write_available();
+      TICK(INFER)
+      std::vector<std::vector<Detection>> detections = inference_->Infer(images, 0.2f, 0.2f);
+      TOCK_BATCH(INFER,8)
+      LOG(INFO) << "stream id: " << stream_id_ <<" remain frames: " << 1024 - frames_.write_available();
+      for (auto tup : boost::combine(detections, images)) {
+        std::vector<Detection> detection;
+        cv::Mat image;
+        boost::tie(detection, image) = tup;
+//        for (const auto &info : detection) {
+//          cv::rectangle(image, info.box, cv::Scalar(255, 0, 0), 4);
+//        }
+//        cv::imshow("window",image);
+//        cv::waitKey(3);
+      }
       images.clear();
       if (!this->player_->is_runnable()) {
         break;
@@ -110,16 +123,10 @@ void VideoStream::Infer() {
 
 void VideoStream::ReadImages() {
   uint64_t index_frame = 0;
-  cv::namedWindow("window" + std::to_string(stream_id_));
-
   while (true) {
     std::optional<Frame> frame_opt = player_->get_image();
     if (frame_opt.has_value()) {
       auto image = frame_opt.value().image_;
-      cv::resize(image, image, cv::Size(640, 640));
-      cv::imshow("window" + std::to_string(stream_id_), image);
-      cv::waitKey(15);
-
       index_frame += 1;
       if (index_frame % duration_ == 0) {
         continue;
@@ -183,14 +190,16 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
     return detections;
   }
   std::vector<std::vector<float>> input_tensor_values_all;
-  for (int i = 0; i < batch_; ++i) {
+  size_t input_tensor_size = vectorProduct({1, input_dims_.d[1], input_dims_.d[2], input_dims_.d[3]});
+
+  std::shared_ptr<float> blob;
+  for (size_t i = 0; i < batch_; ++i) {
     const cv::Mat &image = images.at(i);
     LOG_IF(FATAL, image.empty()) << "has empty image";
 
     cv::Mat float_image;
     image.convertTo(float_image, CV_32FC3, 1 / 255.0);
-    std::shared_ptr<float>
-        blob = std::shared_ptr<float>(new float[float_image.cols * float_image.rows * float_image.channels()]);
+    blob = std::shared_ptr<float>(new float[float_image.cols * float_image.rows * float_image.channels()]);
     cv::Size float_image_size{float_image.cols, float_image.rows};
 
     std::vector<cv::Mat> chw(float_image.channels());
@@ -199,7 +208,6 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
     }
     cv::split(float_image, chw);
 
-    size_t input_tensor_size = vectorProduct({1, input_dims_.d[1], input_dims_.d[2], input_dims_.d[3]});
     std::vector<float> input_tensor_values(blob.get(), blob.get() + input_tensor_size);
     input_tensor_values_all.push_back(input_tensor_values);
   }
@@ -210,7 +218,7 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
   onnx_net_->CopyFromHostToDevice(input, input_binding_);
   onnx_net_->Forward();
   onnx_net_->CopyFromDeviceToHost(output, output_binding_);
-  for (int i = 0; i < batch_; ++i) {
+  for (size_t i = 0; i < batch_; ++i) {
     std::vector<cv::Rect> boxes;
     std::vector<float> confs;
     std::vector<int> class_ids;

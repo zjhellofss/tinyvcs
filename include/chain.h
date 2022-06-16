@@ -24,8 +24,8 @@ class Inference {
   Inference(std::string onnx_file, std::string engine_file, int device, bool enable_fp16)
       : onnx_file_(std::move(onnx_file)),
         engine_file_(std::move(engine_file)),
-        device_(device),
-        enable_fp16_(enable_fp16) {
+        enable_fp16_(enable_fp16),
+        device_(device) {
 
   }
   void Init();
@@ -38,7 +38,7 @@ class Inference {
   std::string engine_file_;
   bool enable_fp16_ = false;
   int device_ = 0;
-  int batch_ = 0;
+  size_t batch_ = 0;
   int num_classes_ = 0;
   int elements_in_one_batch_ = 0;
   int elements_in_all_batch_ = 0;

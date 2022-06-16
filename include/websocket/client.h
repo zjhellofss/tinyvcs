@@ -54,7 +54,7 @@ class Connection {
 
   bool Send(const std::string &message);
 
-  bool IsRunnable() const;
+  bool is_runnable() const;
 
  private:
   client endpoint_;
