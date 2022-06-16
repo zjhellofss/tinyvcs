@@ -86,7 +86,7 @@ class VideoStream {
   std::vector<std::string> subscriptions_;
   std::vector<std::thread> threads_;
   std::vector<std::shared_ptr<Connection>> connnections_;
-  SynchronizedVector<Frame> frames_;
+  boost::lockfree::spsc_queue<Frame, boost::lockfree::capacity<1024>> frames_;
   std::shared_ptr<Player> player_;
   std::unique_ptr<Inference> inference_;
 };

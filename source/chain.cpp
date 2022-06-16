@@ -76,20 +76,31 @@ bool VideoStream::Open() {
 void VideoStream::Infer() {
   std::vector<cv::Mat> images;
   while (true) {
-    try {
-      Frame f = frames_.Pop();
-      if (this->inference_) {
-        images.push_back(f.image_);
-        if (images.size() == batch_) {
-          inference_->Infer(images, 0.2f, 0.2f);
-          LOG(INFO) << "stream id: " << stream_id_ << " remain frames: " << frames_.Size();
-          images.clear();
+    for (;;) {
+      if (frames_.read_available()) {
+        Frame f;
+        bool read_success = frames_.pop(f);
+        if (read_success) {
+
+          images.push_back(f.image_);
+          break;
         }
       }
+
+      if (!this->player_->is_runnable()) {
+        break;
+      }
     }
-    catch (SynchronizedVectorException &e) {
-      if (!player_->IsRunnable()) {
-        LOG(ERROR) << "video stream infer function exits!";
+
+    if (!this->player_->is_runnable() && images.size() != batch_) {
+      break;
+    }
+
+    if (inference_ && images.size() == batch_) {
+      inference_->Infer(images, 0.2f, 0.2f);
+      LOG(INFO) << "stream id: " << stream_id_ << " remain frames: " << 1024 - frames_.write_available();
+      images.clear();
+      if (!this->player_->is_runnable()) {
         break;
       }
     }
@@ -98,23 +109,28 @@ void VideoStream::Infer() {
 
 void VideoStream::ReadImages() {
   uint64_t index_frame = 0;
+  cv::namedWindow("window");
+
   while (true) {
-    try {
-      Frame frame = player_->GetImage();
+    std::optional<Frame> frame_opt = player_->get_image();
+    if (frame_opt.has_value()) {
+      cv::imshow("window", frame_opt.value().image_);
+      cv::waitKey(50);
+
+      index_frame += 1;
+      if (index_frame % duration_ == 0) {
+        continue;
+      }
       if (this->inference_) {
-        if (index_frame % duration_ == 0) {
-          frames_.Push(frame);
-        }
+        frames_.push(frame_opt.value()); //fixme push success?
       }
-    } catch (SynchronizedVectorException &e) {
-      if (!player_->IsRunnable()) {
-        LOG(ERROR) << "video stream read image function exits!";
+    } else {
+      if (!player_->is_runnable())
         break;
-      }
     }
-    index_frame += 1;
   }
   LOG(INFO) << "Read images process is exited!";
+  cv::destroyAllWindows();
 }
 
 void VideoStream::set_inference(size_t batch, const std::string &engine_file) {

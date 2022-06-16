@@ -16,14 +16,14 @@ int main(int argc, char *argv[]) {
   subscriptions.emplace_back("ws://127.0.0.1:9002/");
 
   std::vector<std::thread> threads;
-  for (int i = 0; i < 8; ++i) {
+  for (int i = 0; i < 1; ++i) {
     std::thread t([&, i] {
       VideoStream stream(i + 3,
                          3,
                          "rtsp://127.0.0.1:8554/mystream",
                          subscriptions);
       bool b = stream.Open();
-      stream.set_inference(8,"/home/fss/code/origin_vsc/tinyvcs/tmp/v5m8.plan");
+//      stream.set_inference(8,"/home/fss/code/origin_vsc/tinyvcs/tmp/v5m8.plan");
       assert(b);
       stream.Run();
     });

@@ -14,39 +14,41 @@ bool Convert(AVFrame *frame, cv::Mat &image) {
     return false;
   }
   if (image.size().width != frame->width ||
-      image.size().height != frame->height || image.type() != CV_8UC4) {
+      image.size().height != frame->height || image.type() != CV_8UC3) {
     LOG(ERROR) << "Input opencv mat do not have correct sizes";
   }
+  //resize first
+
   int ret = -1;
   switch (frame->format) {
     case AVPixelFormat::AV_PIX_FMT_YUV420P: {
-      ret = libyuv::I420ToARGB(frame->data[0], frame->linesize[0],
-                               frame->data[1], frame->linesize[1],
-                               frame->data[2], frame->linesize[2],
-                               image.data, frame->width * 4,
-                               frame->width,
-                               frame->height);
+      ret = libyuv::I420ToRGB24(frame->data[0], frame->linesize[0],
+                                frame->data[1], frame->linesize[1],
+                                frame->data[2], frame->linesize[2],
+                                image.data, frame->width * 3,
+                                frame->width,
+                                frame->height);
 
       break;
     }
     case AVPixelFormat::AV_PIX_FMT_YUVJ420P: {
-      ret = libyuv::J420ToARGB(frame->data[0], frame->linesize[0],
-                               frame->data[1], frame->linesize[1],
-                               frame->data[2], frame->linesize[2],
-                               image.data, frame->width * 4,
-                               frame->width,
-                               frame->height);
+      ret = libyuv::J420ToRGB24(frame->data[0], frame->linesize[0],
+                                frame->data[1], frame->linesize[1],
+                                frame->data[2], frame->linesize[2],
+                                image.data, frame->width * 3,
+                                frame->width,
+                                frame->height);
       break;
     }
     case AVPixelFormat::AV_PIX_FMT_NV12: {
-      ret = libyuv::NV12ToARGB(frame->data[0],
-                               frame->linesize[0],
-                               frame->data[1],
-                               frame->linesize[1],
-                               image.data,
-                               frame->width * 4,
-                               frame->width,
-                               frame->height);
+      ret = libyuv::NV12ToRGB24(frame->data[0],
+                                frame->linesize[0],
+                                frame->data[1],
+                                frame->linesize[1],
+                                image.data,
+                                frame->width * 3,
+                                frame->width,
+                                frame->height);
       break;
     }
     default: {

@@ -10,11 +10,15 @@
 #include "glog/logging.h"
 #include "fmt/core.h"
 #include "opencv2/opencv.hpp"
+#include "tick.h"
 
 #include "ffmpeg.h"
 #include "safevec.h"
 #include "frame.h"
 #include "image_utils.h"
+#include "convert.h"
+
+AVPixelFormat  Player::hwformat_ = AVPixelFormat::AV_PIX_FMT_NONE;
 
 static int InterruptCallback(void *opaque);
 
@@ -44,7 +48,6 @@ void Player::ReadPackets() {
     block_starttime_ = time(nullptr);
     auto packet = std::shared_ptr<AVPacket>(av_packet_alloc(), PacketDeleter);
     auto packet_raw = packet.get();
-    av_init_packet(packet_raw);
     int ret = av_read_frame(fmt_ctx_, packet_raw);
     fmt_ctx_->interrupt_callback.callback = nullptr;
     if (ret != 0) {
@@ -60,16 +63,17 @@ void Player::ReadPackets() {
     if (packet_raw->stream_index != video_stream_index_) {
       continue;
     }
-    frames_.Push(packet);
-    LOG(INFO) << fmt::format("Read packet {} pts completely!", packet->pts);
+    frames_.push(packet); //fixme push success?
+    LOG(INFO) << fmt::format("stream id {} read packet {} pts completely!", stream_idx_, packet->pts);
   }
   is_runnable_ = false;
-  LOG(INFO) << "Read packet process is exited!";
+  LOG(INFO) << "read packet process is exited!";
 }
 
 void Player::DecodePackets() {
-  std::atomic_int pts = 0;
+  uint64_t pts = 0;
   std::shared_ptr<AVFrame> frame = std::shared_ptr<AVFrame>(av_frame_alloc(), FrameDeleter);
+  std::shared_ptr<AVFrame> sw_frame = std::shared_ptr<AVFrame>(av_frame_alloc(), FrameDeleter);
   cv::Mat image = cv::Mat(this->dh_, this->dw_, CV_8UC3);
 
   while (true) {
@@ -78,18 +82,22 @@ void Player::DecodePackets() {
       break;
     }
     std::shared_ptr<AVPacket> packet;
-    try {
-      packet = this->frames_.Pop();
-    }
-    catch (SynchronizedVectorException &e) {
-      LOG(ERROR) << e.what();
-      if (!is_runnable_ && this->frames_.Empty()) {
-        break;
+    for (;;) {
+      if (this->frames_.read_available()) {
+        bool read_success = this->frames_.pop(packet);
+        if (read_success && packet) {
+          break;
+        }
       }
+      if (!is_runnable_)
+        break;
     }
-    if (!packet)
-      continue;
 
+    if (!packet) {
+      break;
+    }
+
+    TICK(DECODE)
     int ret = avcodec_send_packet(codec_ctx_, packet.get());
     if (ret != 0) {
       const int msg_len = 512;
@@ -110,31 +118,51 @@ void Player::DecodePackets() {
       }
     }
 
-    if (!frame) {
-      LOG(ERROR) << "Read empty frame";
-      continue;
-    }
     int width = frame->width;
     int height = frame->height;
     if (width == 0 || height == 0 || width != dw_ || height != dh_) {
-      LOG(ERROR) << "Frame don't have correct size pts: " << frame->pts;
+      LOG(ERROR) << "stream id: " << stream_idx_ << " frame don't have correct size pts: " << frame->pts;
       continue;
     }
 
-    const int h = sws_scale(sws_context_, frame->data, frame->linesize, 0, height,
-                            &image.data, linesize_);
+    AVFrame *tmp_frame;
 
-    if (h < 0 || h != frame->height) {
-      LOG(ERROR) << "sws scale convert failed " << frame->pts;
+    if (Player::hwformat_ != AVPixelFormat::AV_PIX_FMT_NONE && frame->format == Player::hwformat_) {
+      TICK(TRANSFER)
+      if (av_hwframe_transfer_data(sw_frame.get(), (const AVFrame *) frame.get(), 0) < 0) {
+        LOG(ERROR) << "Error transferring the data to system memory";
+      } else {
+        tmp_frame = sw_frame.get();
+      }
+      TOCK(TRANSFER)
+    } else {
+      tmp_frame = frame.get();
+    }
+
+    if (!tmp_frame) {
+      LOG(ERROR) << "Read empty frame or error format";
+      continue;
+    }
+
+//    const int h = sws_scale(sws_context_, frame->data, frame->linesize, 0, height,
+//                            &image.data, linesize_);
+    TICK(CONVERT)
+    bool convert_success = Convert(tmp_frame, image);
+    TOCK(CONVERT)
+    if (!convert_success) {
+      LOG(ERROR) << "sws scale convert failed " << tmp_frame->pts;
     } else {
       cv::Mat output_image;
       letterbox(image, output_image);
-      Frame f(pts, frame->pts, output_image);
-      LOG(INFO) << fmt::format("Decode frame {} pts completely!", frame->pts);
-      this->decoded_images_.Push(f);
+      tmp_frame->pts = frame->pts;
+      Frame f(pts, tmp_frame->pts, output_image);
+      this->decoded_images_.push(f);
+      LOG(INFO) << fmt::format("stream id {} decode frame {} pts completely!", stream_idx_, tmp_frame->pts);
       pts += 1;
     }
+    TOCK(DECODE)
   }
+
   is_runnable_ = false;
   LOG(INFO) << "Decode packet process is exited!";
 }
@@ -152,11 +180,36 @@ void Player::Run() {
   threads_.push_back(std::move(t2));
 }
 
-Player::Player(int stream_idx, std::string rtsp) : input_rtsp_(std::move(rtsp)), stream_idx_(stream_idx) {
+Player::Player(int stream_idx, std::string rtsp)
+    : input_rtsp_(std::move(rtsp)), stream_idx_(stream_idx) {
 
 }
 
+AVPixelFormat Player::GetHwFormat(AVCodecContext *ctx, const enum AVPixelFormat *pix_fmts) {
+  const AVPixelFormat *p;
+  for (p = pix_fmts; *p != -1; p++) {
+    if (*p == hwformat_)
+      return *p;
+  }
+  return AV_PIX_FMT_NONE;
+}
+
 bool Player::Open() {
+  // find cuda support
+  AVHWDeviceType hw_type = av_hwdevice_find_type_by_name("cuda");
+  bool has_cuda = true;
+  if (hw_type == AV_HWDEVICE_TYPE_NONE) {
+    std::stringstream ss;
+    ss << fmt::format("Device type %s is not supported.\n", "cuda");
+    ss << std::string("Available device types:");
+    while ((hw_type = av_hwdevice_iterate_types(hw_type)) != AV_HWDEVICE_TYPE_NONE)
+      ss << fmt::format(" %s", av_hwdevice_get_type_name(hw_type));
+    ss << "\n";
+    std::string error_message = ss.str();
+    LOG(WARNING) << error_message;
+    has_cuda = false;
+  }
+
   fmt_ctx_ = avformat_alloc_context();
   if (fmt_ctx_ == nullptr) {
     LOG(ERROR) << "avformat_alloc_context failed";
@@ -219,10 +272,34 @@ bool Player::Open() {
     return false;
   }
 
+  if (has_cuda) {
+    for (int i = 0;; i++) {
+      const AVCodecHWConfig *config = avcodec_get_hw_config(codec, i);
+      if (!config) {
+        char error_buf[512] = {0};
+        snprintf(error_buf, 512, "Decoder %s does not support device type %s",
+                 codec->name, av_hwdevice_get_type_name(hw_type));
+        LOG(FATAL) << error_buf;
+        return false;
+      }
+      if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
+          config->device_type == hw_type) {
+        Player::hwformat_ = config->pix_fmt;
+        break;
+      }
+    }
+  }
+
   ret = avcodec_parameters_to_context(codec_ctx_, codec_param);
   if (ret != 0) {
     LOG(ERROR) << fmt::format("avcodec_parameters_to_context error: {}", ret);
     return false;
+  }
+
+  if (has_cuda) {
+    codec_ctx_->get_format = GetHwFormat;
+    if (HwDecoderInit(codec_ctx_, hw_type) < 0)
+      LOG(FATAL) << "HW decoder init error";
   }
 
   if (codec_ctx_->codec_type == AVMEDIA_TYPE_VIDEO || codec_ctx_->codec_type == AVMEDIA_TYPE_AUDIO) {
@@ -270,6 +347,17 @@ bool Player::Open() {
   return true;
 }
 
+int Player::HwDecoderInit(AVCodecContext *ctx, AVHWDeviceType type) {
+  int err;
+  err = av_hwdevice_ctx_create(&hw_device_ctx_, type,
+                               nullptr, nullptr, 0);
+  if (err != 0) {
+    return err;
+  }
+  ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx_);
+  return err;
+}
+
 Player::~Player() {
   for (std::thread &t : this->threads_) {
     if (t.joinable()) {
@@ -303,18 +391,35 @@ Player::~Player() {
     sws_freeContext(sws_context_);
     sws_context_ = nullptr;
   }
+
+  if (hw_device_ctx_ != nullptr) {
+    av_buffer_unref(&hw_device_ctx_);
+    hw_device_ctx_ = nullptr;
+  }
 }
 
-Frame Player::GetImage() {
-  Frame f = this->decoded_images_.Pop();
-  return f;
+std::optional<Frame> Player::get_image() {
+  Frame frame;
+  for (;;) {
+    if (this->decoded_images_.read_available()) {
+      bool has_frame = this->decoded_images_.pop(frame);
+      if (has_frame) {
+        return frame;
+      }
+    }
+
+    if (!this->decoded_images_.read_available() && !is_runnable_) {
+      break;
+    }
+  }
+  return std::nullopt;
 }
 
 static int InterruptCallback(void *opaque) {
   if (opaque == nullptr) return 0;
   Player *player = (Player *) opaque;
   if (time(nullptr) - player->block_starttime_ > player->block_timeout_) {
-    std::string s = fmt::format("interrupt quit, media address={}", player->GetRtsp());
+    std::string s = fmt::format("interrupt quit, media address={}", player->get_rtsp());
     LOG(ERROR) << s;
     return 1;
   }

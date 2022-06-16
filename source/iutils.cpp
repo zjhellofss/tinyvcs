@@ -5,9 +5,9 @@
 void letterbox(const cv::Mat &image, cv::Mat &out_image,
                const cv::Size &new_shape,
                const cv::Scalar &color,
-               bool auto_ ,
-               bool scale_fill ,
-               bool scale_up ,
+               bool auto_,
+               bool scale_fill,
+               bool scale_up,
                int stride) {
   cv::Size shape = image.size();
   float r = std::min((float) new_shape.height / (float) shape.height,
@@ -45,6 +45,7 @@ void letterbox(const cv::Mat &image, cv::Mat &out_image,
   int bottom = int(std::round(dh + 0.1f));
   int left = int(std::round(dw - 0.1f));
   int right = int(std::round(dw + 0.1f));
+//  cv::cvtColor(out_image, out_image, cv::COLOR_RGB2BGR);
   cv::copyMakeBorder(out_image, out_image, top, bottom, left, right, cv::BORDER_CONSTANT, color);
 }
 

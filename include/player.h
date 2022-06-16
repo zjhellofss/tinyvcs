@@ -8,6 +8,7 @@
 #include <vector>
 #include <thread>
 #include <opencv2/opencv.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
 #include <atomic>
 
 #include "safevec.h"
@@ -25,19 +26,24 @@ class Player {
 
   void Run();
 
-  Frame GetImage();
+  std::optional<Frame> get_image();
 
  public:
-  const std::string &GetRtsp() const {
+  const std::string &get_rtsp() const {
     return this->input_rtsp_;
   }
-  bool IsRunnable() const {
+
+  bool is_runnable() const {
     return this->is_runnable_;
   }
  private:
   void ReadPackets(); ///
 
   void DecodePackets(); ///
+
+  int HwDecoderInit(AVCodecContext *ctx, AVHWDeviceType type);
+
+  static AVPixelFormat GetHwFormat(AVCodecContext *ctx, const enum AVPixelFormat *pix_fmts);
 
  private:
   std::vector<std::thread> threads_;
@@ -60,12 +66,14 @@ class Player {
   int64_t start_time_ = 0;
   int dw_ = 0;
   int dh_ = 0;
+  AVBufferRef *hw_device_ctx_ = nullptr;
   int stream_idx_ = 0;
   std::atomic_bool is_runnable_ = false;
-  SynchronizedVector<std::shared_ptr<AVPacket>> frames_;
-  SynchronizedVector<Frame> decoded_images_;
+  boost::lockfree::spsc_queue<std::shared_ptr<AVPacket>, boost::lockfree::capacity<1024>> frames_;
+  boost::lockfree::spsc_queue<Frame, boost::lockfree::capacity<1024>> decoded_images_;
  public:
   int64_t block_starttime_ = time(nullptr);
   int64_t block_timeout_ = 10;
+  static AVPixelFormat hwformat_;
 };
 #endif //TINYVCS_INCLUDE_PLAYER_H_
