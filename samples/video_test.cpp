@@ -22,6 +22,7 @@ static bool validateRtsp(const char *flag_name, const std::string &address) {
     return true;
   }
 }
+
 DEFINE_string(rtsp, "", "Which rtsp address to connect");
 DEFINE_validator(rtsp, &validateRtsp);
 
@@ -42,6 +43,7 @@ int main(int argc, char *argv[]) {
                      FLAGS_duration,
                      FLAGS_rtsp,
                      subscriptions);
+
   bool b = stream.Open();
   if (!FLAGS_engine.empty()) {
     stream.set_inference(FLAGS_batch_size, FLAGS_engine);

@@ -63,10 +63,9 @@ void Player::ReadPackets() {
       continue;
     }
     frames_.push(packet); //fixme push success?
-    LOG(INFO) << fmt::format("stream id {} read packet {} pts completely!", stream_idx_, packet->pts);
   }
   is_runnable_ = false;
-  LOG(INFO) << "read packet process is exited!";
+  LOG(WARNING) << "read packet process is exited!";
 }
 
 void Player::DecodePackets() {
@@ -151,7 +150,6 @@ void Player::DecodePackets() {
       tmp_frame->pts = frame->pts;
       Frame f(pts, tmp_frame->pts, output_image);
       this->decoded_images_.push(f);
-      LOG(INFO) << fmt::format("stream id {} decode frame {} pts completely!", stream_idx_, tmp_frame->pts);
       pts += 1;
     }
     TOCK(DECODE)
@@ -159,7 +157,7 @@ void Player::DecodePackets() {
   }
 
   is_runnable_ = false;
-  LOG(INFO) << "Decode packet process is exited!";
+  LOG(WARNING) << "Decode packet process is exited!";
 }
 
 void Player::Run() {

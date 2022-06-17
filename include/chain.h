@@ -36,6 +36,8 @@ class VideoStream {
 
   bool Open();
 
+  void Show();
+
   void ReadImages();
 
   void Infer();
@@ -52,7 +54,8 @@ class VideoStream {
   std::vector<std::string> subscriptions_;
   std::vector<std::thread> threads_;
   std::vector<std::shared_ptr<Connection>> connnections_;
-  boost::lockfree::spsc_queue<cv::Mat, boost::lockfree::capacity<1024>> frames_;
+  boost::lockfree::spsc_queue<Frame, boost::lockfree::capacity<1024>> frames_;
+  boost::lockfree::spsc_queue<Frame, boost::lockfree::capacity<1024>> show_frames_;
   std::shared_ptr<Player> player_;
   std::unique_ptr<Inference> inference_;
 };

@@ -26,6 +26,11 @@ void VideoStream::Run() {
       this->Infer();
     });
     threads_.push_back(std::move(t2));
+
+    std::thread t3([this]() {
+      this->Show();
+    });
+    threads_.push_back(std::move(t3));
   }
 }
 
@@ -50,15 +55,43 @@ bool VideoStream::Open() {
   return true;
 }
 
+void VideoStream::Show() {
+  while (true) {
+    Frame f;
+    for (;;) {
+      if (show_frames_.read_available()) {
+        bool success = show_frames_.pop(f);
+        if (success) {
+          break;
+        }
+      }
+
+      if (!this->player_->is_runnable() && !show_frames_.read_available()) {
+        break;
+      }
+    }
+    auto detections = f.detections_;
+    cv::Mat image = f.image_;
+    for (const auto &detection : detections) {
+      cv::rectangle(image, detection.box, cv::Scalar(255, 0, 0), 8);
+    }
+    if (!this->player_->is_runnable() && !show_frames_.read_available()) {
+      break;
+    }
+  }
+}
+
 void VideoStream::Infer() {
   std::vector<cv::Mat> images;
+  std::vector<Frame> frames;
   while (true) {
     for (;;) {
       if (frames_.read_available()) {
-        cv::Mat image;
-        bool read_success = frames_.pop(image);
+        Frame f;
+        bool read_success = frames_.pop(f);
         if (read_success) {
-          images.push_back(image);
+          images.push_back(f.preprocess_image_);
+          frames.push_back(f);
           break;
         }
       }
@@ -75,15 +108,15 @@ void VideoStream::Infer() {
     if (inference_ && images.size() == batch_) {
       std::vector<std::vector<Detection>> detections = inference_->Infer(images, 0.2f, 0.2f);
       LOG(INFO) << "stream id: " << stream_id_ << " remain frames: " << 1024 - frames_.write_available();
-      for (auto tup : boost::combine(detections, images)) {
+      for (auto tup : boost::combine(detections, frames)) {
         std::vector<Detection> detection;
-        cv::Mat image;
-        boost::tie(detection, image) = tup;
-        for (const auto &info : detection) {
-          cv::rectangle(image, info.box, cv::Scalar(255, 0, 0), 4);
-        }
+        Frame frame;
+        boost::tie(detection, frame) = tup;
+        frame.set_detections(detection);
+        show_frames_.push(frame);
       }
       images.clear();
+      frames.clear();
       if (!this->player_->is_runnable()) {
         break;
       }
@@ -96,16 +129,18 @@ void VideoStream::ReadImages() {
   while (true) {
     std::optional<Frame> frame_opt = player_->get_image();
     if (frame_opt.has_value()) {
+      Frame f = frame_opt.value();
       cv::Mat preprocess_image;
-      auto image = frame_opt.value().image_;
+      auto image = f.image_;
       index_frame += 1;
-      if (index_frame % duration_ == 0) {
+      if (index_frame % duration_) {
         continue;
       }
       if (this->inference_) {
         letterbox(image, preprocess_image);
         preprocess_image.convertTo(preprocess_image, CV_32FC3, 1 / 255.0);
-        frames_.push(preprocess_image); //fixme push success?
+        f.set_preprocess_image(preprocess_image);
+        frames_.push(f); //fixme push success?
       }
     } else {
       if (!player_->is_runnable())
@@ -113,7 +148,6 @@ void VideoStream::ReadImages() {
     }
   }
   LOG(INFO) << "read images process is exited!";
-  cv::destroyAllWindows();
 }
 
 void VideoStream::set_inference(size_t batch, const std::string &engine_file) {

@@ -51,7 +51,7 @@ void Inference::Init() {
   output_binding_ = onnx_net_->output_bindings();
   output_dims_ = onnx_net_->binding_dims(output_binding_);
   batch_ = output_dims_.d[0];
-  LOG_IF(FATAL, batch_ < 0) << "inference batch is less than zero";
+  LOG_IF(FATAL, batch_ == 0) << "inference batch is less than zero";
 
   num_classes_ = (int) output_dims_.d[2] - 5;
   elements_in_one_batch_ = (int) (output_dims_.d[1] * output_dims_.d[2]);
@@ -135,7 +135,7 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
     for (int idx : indices) {
       Detection det;
       det.box = cv::Rect(boxes[idx]);
-      scaleCoords(resized_shape, det.box, images.at(i).size());
+      scaleCoords(resized_shape, det.box, cv::Size{960, 640});
 
       det.conf = confs[idx];
       det.class_id = class_ids[idx];
