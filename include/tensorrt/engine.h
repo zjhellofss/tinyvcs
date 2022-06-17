@@ -9,10 +9,9 @@
 #include <memory>
 
 #include "NvInfer.h"
+#include "boost/core/noncopyable.hpp"
 #include "NvInferVersion.h"
 #include "cuda_runtime.h"
-
-
 
 template<typename T>
 struct TrtDestroyer {
@@ -36,67 +35,32 @@ class TrtLogger : public nvinfer1::ILogger {
 
 void SetDevice(int device);
 
-int GetDevice() ;
+bool setTensorDynamicRange(const nvinfer1::INetworkDefinition &network, float in_range, float out_range);
 
-bool setTensorDynamicRange(const nvinfer1::INetworkDefinition &network, float in_range, float out_range) ;
+void SaveEngine(const std::string &fileName, TrtUniquePtr<nvinfer1::IHostMemory> &plan);
 
-void SaveEngine(const std::string &fileName, TrtUniquePtr<nvinfer1::IHostMemory> &plan) ;
-
-class Trt {
+class Trt : private boost::noncopyable {
  public:
 
   Trt();
 
   ~Trt();
 
-  Trt(const Trt &trt) = delete;
-
-  Trt &operator=(const Trt &trt) = delete;
-
   void EnableFP16();
 
-  void EnableINT8();
-
-  void SetWorkpaceSize(size_t workspaceSize);
-
-  void SetDLACore(int dla_core);
-
-  void SetCustomOutput(const std::vector<std::string> &custom_outputs);
-
-  void SetLogLevel(int severity);
-
-  void AddDynamicShapeProfile(const std::string &input_name,
-                              const std::vector<int> &min_dim_vec,
-                              const std::vector<int> &opt_dim_vec,
-                              const std::vector<int> &maxDimVec);
-
-  void BuildEngine(const std::string &onnx_model, const std::string &engine_file);
-
-  bool DeserializeEngine(const std::string &engine_file, int dla_core = -1);
+  bool DeserializeEngine(const std::string &engine_file);
 
   bool Forward();
 
-  bool Forward(const cudaStream_t &stream);
+  void CopyFromHostToDevice(const std::vector<float> &input, int bind_index);
 
-  void SetBindingDimensions(std::vector<int> &input_dims, int bind_index);
+  void CopyFromDeviceToHost(std::vector<float> &output, int bind_index);
 
-  void CopyFromHostToDevice(const std::vector<float> &input, int bind_index, const cudaStream_t &stream = 0);
+  nvinfer1::Dims binding_dims(int bind_index) const; /// get binding dimensions
 
-  void CopyFromDeviceToHost(std::vector<float> &output, int bind_index, const cudaStream_t &stream = 0);
+  int input_bindings() const; ///get number of input bindings
 
-  void *GetBindingPtr(int bind_index) const; ///Set input dimension for an inference, call this before forward with dynamic shape mode.
-
-  size_t GetBindingSize(int bind_index) const;
-
-  nvinfer1::Dims GetBindingDims(int bind_index) const; /// get binding dimensions
-
-  nvinfer1::DataType GetBindingDataType(int bind_index) const; ///get binding data type
-
-  std::string GetBindingName(int bind_index) const;/// get binding name
-
-  int GetNbInputBindings() const; ///get number of input bindings
-
-  int GetNbOutputBindings() const; ///get number of output bindings
+  int output_bindings() const; ///get number of output bindings
 
  protected:
   void CreateDeviceBuffer();
@@ -129,6 +93,6 @@ class Trt {
 
   int nb_output_bindings_ = 0;
 
-  bool is_dynamic_shape_ = false;
+  cudaStream_t stream_{};
 };
 #endif //TINYVCS_INCLUDE_TENSORRT_ENGINE_H_
