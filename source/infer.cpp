@@ -78,7 +78,6 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
     blob_ = std::shared_ptr<float>(new float[batch_ * rows * cols * channels]);
   }
 
-  TICK(PREPROCESS)
   for (size_t i = 0; i < batch_; ++i) {
     float *data_raw = blob_.get() + i * batch_;
     const cv::Mat &image = images.at(i);
@@ -93,7 +92,6 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
     std::vector<float> input_tensor_values(data_raw, data_raw + input_tensor_size);
     input_tensor_values_all.push_back(input_tensor_values);
   }
-  TOCK(PREPROCESS)
 
   std::vector<float> input;
   input = flatten(input_tensor_values_all);

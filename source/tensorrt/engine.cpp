@@ -51,7 +51,6 @@ Trt::Trt() {
   cudaStreamCreate(&stream_);
   LOG(INFO) << "Create trt instance";
   logger_ = std::make_unique<TrtLogger>();
-  initLibNvInferPlugins(logger_.get(), "");
 
   builder_.reset(nvinfer1::createInferBuilder(*logger_));
   LOG_IF(FATAL, builder_ == nullptr) << "create trt builder failed";

@@ -1,45 +1,55 @@
 //
 // Created by fss on 22-6-9.
 //
-#include "glog/logging.h"
-#include "chain.h"
-#include <boost/program_options.hpp>
-#include <boost/exception/diagnostic_information.hpp>
 
 #include <vector>
 #include <string>
+#include <fmt/core.h>
+
+#include "glog/logging.h"
+#include "chain.h"
+#include "gflags/gflags.h"
+
+static bool validateRtsp(const char *flag_name, const std::string &address) {
+  if (address.empty()) {
+    return false;
+  }
+  auto pos = address.find("rtsp://");
+  if (pos != 0) {
+    LOG(WARNING) << "invalid rtsp address: " << address;
+    return false;
+  } else {
+    return true;
+  }
+}
+DEFINE_string(rtsp, "", "Which rtsp address to connect");
+DEFINE_validator(rtsp, &validateRtsp);
+
+DEFINE_string(engine, "", "model engine for inference");
+DEFINE_string(log, "./log", "log file dir");
+DEFINE_bool(stderr, true, "log to stderr");
+DEFINE_int32(loglevel, 0, "min log level");
+DEFINE_int32(id, 0, "stream id");
+DEFINE_int32(batch_size, 8, "inference batch size");
+DEFINE_int32(duration, 3, "inference duration frame");
 
 int main(int argc, char *argv[]) {
 
-  boost::program_options::options_description desc("Options");
-  desc.add_options()
-      ("help,h", "produce help message")
-      ("rtsp", boost::program_options::value<std::string>(), "rtsp address");
-
-  boost::program_options::variables_map vm;
-  try {
-    boost::program_options::store(boost::program_options::parse_command_line(argc, argv, desc), vm);
-    boost::program_options::notify(vm);
-  }
-  catch (boost::exception &e) {
-    std::cerr << boost::diagnostic_information(e) << std::endl;
-    return -1;
-  }
-
-  google::InitGoogleLogging(argv[0]);
-//  FLAGS_log_dir = "./log";
-  FLAGS_alsologtostderr = true;
-  FLAGS_minloglevel = 0;
+  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  google::InitGoogleLogging(FLAGS_log.data());
   std::vector<std::string> subscriptions;
-  std::string rtsp = vm["rtsp"].as<std::string>();
-  VideoStream stream(0,
-                     3,
-                     rtsp,
+  VideoStream stream(FLAGS_id,
+                     FLAGS_duration,
+                     FLAGS_rtsp,
                      subscriptions);
   bool b = stream.Open();
-  stream.set_inference(8,"/home/fss/code/origin_vsc/tinyvcs/tmp/v5m8.plan");
-  assert(b);
+  if (!FLAGS_engine.empty()) {
+    stream.set_inference(FLAGS_batch_size, FLAGS_engine);
+  }
+  if (!b) {
+    LOG(FATAL) << "stream can be opened!";
+    return -1;
+  }
   stream.Run();
-
   return 0;
 }

@@ -82,8 +82,6 @@ void VideoStream::Infer() {
         for (const auto &info : detection) {
           cv::rectangle(image, info.box, cv::Scalar(255, 0, 0), 4);
         }
-        cv::imshow("window", image);
-        cv::waitKey(3);
       }
       images.clear();
       if (!this->player_->is_runnable()) {
@@ -100,14 +98,13 @@ void VideoStream::ReadImages() {
     if (frame_opt.has_value()) {
       cv::Mat preprocess_image;
       auto image = frame_opt.value().image_;
-      letterbox(image, preprocess_image);
-      preprocess_image.convertTo(preprocess_image, CV_32FC3, 1 / 255.0);
-
       index_frame += 1;
       if (index_frame % duration_ == 0) {
         continue;
       }
       if (this->inference_) {
+        letterbox(image, preprocess_image);
+        preprocess_image.convertTo(preprocess_image, CV_32FC3, 1 / 255.0);
         frames_.push(preprocess_image); //fixme push success?
       }
     } else {

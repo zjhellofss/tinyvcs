@@ -1,8 +1,0 @@
-//
-// Created by fss on 22-6-10.
-//
-
-#ifndef TINYVCS_INCLUDE_TENSORRT_INT_H_
-#define TINYVCS_INCLUDE_TENSORRT_INT_H_
-
-#endif //TINYVCS_INCLUDE_TENSORRT_INT_H_
