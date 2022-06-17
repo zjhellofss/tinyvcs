@@ -32,6 +32,7 @@ class Inference {
   std::vector<std::vector<Detection>> Infer(const std::vector<cv::Mat> &images, float conf_thresh, float iou_thresh);
 
  private:
+  std::shared_ptr<float> blob_;
   std::unique_ptr<Trt> onnx_net_;
   std::string onnx_file_;
   std::string engine_file_;

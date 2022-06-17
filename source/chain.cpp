@@ -15,7 +15,6 @@
 #include "image_utils.h"
 #include "infer.h"
 
-
 void VideoStream::Run() {
   std::thread t1([this]() {
     this->ReadImages();
@@ -56,10 +55,10 @@ void VideoStream::Infer() {
   while (true) {
     for (;;) {
       if (frames_.read_available()) {
-        Frame f;
-        bool read_success = frames_.pop(f);
+        cv::Mat image;
+        bool read_success = frames_.pop(image);
         if (read_success) {
-          images.push_back(f.image_);
+          images.push_back(image);
           break;
         }
       }
@@ -99,13 +98,17 @@ void VideoStream::ReadImages() {
   while (true) {
     std::optional<Frame> frame_opt = player_->get_image();
     if (frame_opt.has_value()) {
+      cv::Mat preprocess_image;
       auto image = frame_opt.value().image_;
+      letterbox(image, preprocess_image);
+      preprocess_image.convertTo(preprocess_image, CV_32FC3, 1 / 255.0);
+
       index_frame += 1;
       if (index_frame % duration_ == 0) {
         continue;
       }
       if (this->inference_) {
-        frames_.push(frame_opt.value()); //fixme push success?
+        frames_.push(preprocess_image); //fixme push success?
       }
     } else {
       if (!player_->is_runnable())

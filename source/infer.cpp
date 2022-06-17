@@ -20,7 +20,7 @@ static std::vector<T> flatten(const std::vector<std::vector<T>> &v) {
 }
 
 static void getBestClassInfo(std::vector<float>::iterator it, const int &num_classes,
-                      float &best_conf, int &best_class_id) {
+                             float &best_conf, int &best_class_id) {
   // first 5 element are box and obj confidence
   best_class_id = 5;
   best_conf = 0;
@@ -69,28 +69,27 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
     LOG(ERROR) << "infer images not equal to batch";
     return detections;
   }
-  std::vector<std::vector<float>> input_tensor_values_all;
+  std::vector<std::vector<float>> input_tensor_values_all(batch_);
   size_t input_tensor_size = vectorProduct({1, input_dims_.d[1], input_dims_.d[2], input_dims_.d[3]});
   size_t cols = images.at(0).cols;
   size_t rows = images.at(0).rows;
   size_t channels = images.at(0).channels();
-  std::shared_ptr<float> blob = std::shared_ptr<float>(new float[batch_ * rows * cols * channels]);
+  if (!blob_) {
+    blob_ = std::shared_ptr<float>(new float[batch_ * rows * cols * channels]);
+  }
 
   TICK(PREPROCESS)
   for (size_t i = 0; i < batch_; ++i) {
-    float *data_raw = blob.get() + i * batch_;
+    float *data_raw = blob_.get() + i * batch_;
     const cv::Mat &image = images.at(i);
     LOG_IF(FATAL, image.empty()) << "has empty image";
 
-    cv::Mat float_image;
-    image.convertTo(float_image, CV_32FC3, 1 / 255.0);
-    cv::Size float_image_size{float_image.cols, float_image.rows};
-
-    std::vector<cv::Mat> chw(float_image.channels());
-    for (int j = 0; j < float_image.channels(); ++j) {
+    cv::Size float_image_size{image.cols, image.rows};
+    std::vector<cv::Mat> chw(image.channels());
+    for (int j = 0; j < image.channels(); ++j) {
       chw[j] = cv::Mat(float_image_size, CV_32FC1, data_raw + j * float_image_size.width * float_image_size.height);
     }
-    cv::split(float_image, chw);
+    cv::split(image, chw);
     std::vector<float> input_tensor_values(data_raw, data_raw + input_tensor_size);
     input_tensor_values_all.push_back(input_tensor_values);
   }

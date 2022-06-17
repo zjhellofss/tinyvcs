@@ -95,7 +95,7 @@ void Player::DecodePackets() {
     if (!packet) {
       break;
     }
-
+    TICK(DECODE)
     int ret = avcodec_send_packet(codec_ctx_, packet.get());
     if (ret != 0) {
       const int msg_len = 512;
@@ -147,13 +147,15 @@ void Player::DecodePackets() {
       LOG(ERROR) << "sws scale convert failed " << tmp_frame->pts;
     } else {
       cv::Mat output_image;
-      letterbox(image, output_image);
+      cv::resize(image, output_image, cv::Size(960, 640));
       tmp_frame->pts = frame->pts;
       Frame f(pts, tmp_frame->pts, output_image);
       this->decoded_images_.push(f);
       LOG(INFO) << fmt::format("stream id {} decode frame {} pts completely!", stream_idx_, tmp_frame->pts);
       pts += 1;
     }
+    TOCK(DECODE)
+
   }
 
   is_runnable_ = false;
