@@ -17,15 +17,21 @@
 #include "image_utils.h"
 #include "convert.h"
 
+static boost::circular_buffer<std::shared_ptr<AVPacket>> packets_pool_;
 AVPixelFormat  Player::hwformat_ = AVPixelFormat::AV_PIX_FMT_NONE;
 
 static int InterruptCallback(void *opaque);
 
 static void PacketDeleter(AVPacket *packet) {
+
   if (packet != nullptr) {
-    av_packet_unref(packet);
-    av_packet_free(&packet);
-    packet = nullptr;
+    if (!packets_pool_.full()) {
+      packets_pool_.push_back(std::shared_ptr<AVPacket>(packet, PacketDeleter));
+    } else {
+      av_packet_unref(packet);
+      av_packet_free(&packet);
+      packet = nullptr;
+    }
   }
 }
 
@@ -45,7 +51,13 @@ void Player::ReadPackets() {
     fmt_ctx_->interrupt_callback.callback = InterruptCallback;
     fmt_ctx_->interrupt_callback.opaque = this;
     block_starttime_ = time(nullptr);
-    auto packet = std::shared_ptr<AVPacket>(av_packet_alloc(), PacketDeleter);
+    std::shared_ptr<AVPacket> packet;
+    if (!packets_pool_.empty()) {
+      packet = packets_pool_.front();
+      packets_pool_.pop_front();
+    } else {
+      packet = std::shared_ptr<AVPacket>(av_packet_alloc(), PacketDeleter);
+    }
     auto packet_raw = packet.get();
     int ret = av_read_frame(fmt_ctx_, packet_raw);
     fmt_ctx_->interrupt_callback.callback = nullptr;
@@ -122,7 +134,7 @@ void Player::DecodePackets() {
       continue;
     }
 
-    AVFrame *tmp_frame;
+    AVFrame *tmp_frame = nullptr;
 
     if (Player::hwformat_ != AVPixelFormat::AV_PIX_FMT_NONE && frame->format == Player::hwformat_) {
       if (av_hwframe_transfer_data(sw_frame.get(), (const AVFrame *) frame.get(), 0) < 0) {
@@ -153,7 +165,6 @@ void Player::DecodePackets() {
       pts += 1;
     }
     TOCK(DECODE)
-
   }
 
   is_runnable_ = false;

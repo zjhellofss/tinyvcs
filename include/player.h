@@ -7,9 +7,10 @@
 #include <string>
 #include <vector>
 #include <thread>
+#include <atomic>
 #include <opencv2/opencv.hpp>
 #include <boost/lockfree/spsc_queue.hpp>
-#include <atomic>
+#include <boost/circular_buffer.hpp>
 
 #include "ffmpeg.h"
 #include "frame.h"

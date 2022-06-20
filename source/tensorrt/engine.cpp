@@ -111,12 +111,12 @@ bool Trt::Forward() {
 void Trt::CopyFromHostToDevice(const std::vector<float> &input,
                                int bind_index) {
   CUDA_CHECK(cudaMemcpyAsync(binding_[bind_index], input.data(),
-                             input.size() * sizeof(float), cudaMemcpyHostToDevice, stream_));
+                             input.size() * sizeof(float), cudaMemcpyHostToDevice, stream_))
 }
 
 void Trt::CopyFromDeviceToHost(std::vector<float> &output, int bind_index) {
   CUDA_CHECK(cudaMemcpyAsync(output.data(), binding_[bind_index],
-                             output.size() * sizeof(float), cudaMemcpyDeviceToHost, stream_));
+                             output.size() * sizeof(float), cudaMemcpyDeviceToHost, stream_))
 }
 
 nvinfer1::Dims Trt::binding_dims(int bind_index) const {

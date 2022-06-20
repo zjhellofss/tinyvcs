@@ -69,32 +69,34 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
     LOG(ERROR) << "infer images not equal to batch";
     return detections;
   }
-  std::vector<std::vector<float>> input_tensor_values_all(batch_);
   size_t input_tensor_size = vectorProduct({1, input_dims_.d[1], input_dims_.d[2], input_dims_.d[3]});
-  size_t cols = images.at(0).cols;
-  size_t rows = images.at(0).rows;
-  size_t channels = images.at(0).channels();
+  std::vector<float> input(input_tensor_size * batch_);
+  float *input_raw = input.data();
+
+  int cols = images.at(0).cols;
+  int rows = images.at(0).rows;
+  int channels = images.at(0).channels();
   if (!blob_) {
-    blob_ = std::shared_ptr<float>(new float[batch_ * rows * cols * channels]);
+    blob_ = std::unique_ptr<float>(new float[batch_ * rows * cols * channels]);
   }
+  std::vector<cv::Mat> chw(channels);
 
   for (size_t i = 0; i < batch_; ++i) {
     float *data_raw = blob_.get() + i * batch_;
     const cv::Mat &image = images.at(i);
+    if (image.rows != rows || image.cols != cols || image.channels() != channels) {
+      LOG(FATAL) << "do not have a same size";
+    }
     LOG_IF(FATAL, image.empty()) << "has empty image";
 
     cv::Size float_image_size{image.cols, image.rows};
-    std::vector<cv::Mat> chw(image.channels());
     for (int j = 0; j < image.channels(); ++j) {
       chw[j] = cv::Mat(float_image_size, CV_32FC1, data_raw + j * float_image_size.width * float_image_size.height);
     }
     cv::split(image, chw);
-    std::vector<float> input_tensor_values(data_raw, data_raw + input_tensor_size);
-    input_tensor_values_all.push_back(input_tensor_values);
+    memcpy(input_raw + i * input_tensor_size, data_raw, input_tensor_size * sizeof(float));
   }
 
-  std::vector<float> input;
-  input = flatten(input_tensor_values_all);
   std::vector<float> output(elements_in_all_batch_);
   onnx_net_->CopyFromHostToDevice(input, input_binding_);
   onnx_net_->Forward();
