@@ -5,19 +5,7 @@
 #include "infer.h"
 #include "glog/logging.h"
 #include "tick.h"
-#include "image_utils.h"
-
-template<typename T>
-static std::vector<T> flatten(const std::vector<std::vector<T>> &v) {
-  std::size_t total_size = 0;
-  for (const auto &sub : v)
-    total_size += sub.size(); // I wish there was a transform_accumulate
-  std::vector<T> result;
-  result.reserve(total_size);
-  for (const auto &sub : v)
-    result.insert(result.end(), sub.begin(), sub.end());
-  return result;
-}
+#include "iutils.h"
 
 static void getBestClassInfo(std::vector<float>::iterator it, const int &num_classes,
                              float &best_conf, int &best_class_id) {
@@ -77,12 +65,12 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
   int rows = images.at(0).rows;
   int channels = images.at(0).channels();
   if (!blob_) {
-    blob_ = std::unique_ptr<float>(new float[batch_ * rows * cols * channels]);
+    blob_ = std::unique_ptr<float>(new float[rows * cols * channels]);
   }
   std::vector<cv::Mat> chw(channels);
 
   for (size_t i = 0; i < batch_; ++i) {
-    float *data_raw = blob_.get() + i * batch_;
+    float *data_raw = blob_.get();
     const cv::Mat &image = images.at(i);
     if (image.rows != rows || image.cols != cols || image.channels() != channels) {
       LOG(FATAL) << "do not have a same size";

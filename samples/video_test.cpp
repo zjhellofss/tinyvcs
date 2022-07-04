@@ -38,16 +38,18 @@ int main(int argc, char *argv[]) {
 
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(FLAGS_log.data());
+  FLAGS_loglevel = 1;
+  FLAGS_log_dir = "./log";
+  FLAGS_alsologtostderr = true;
   std::vector<std::string> subscriptions;
   VideoStream stream(FLAGS_id,
                      FLAGS_duration,
                      FLAGS_rtsp,
                      subscriptions);
-
-  bool b = stream.Open();
   if (!FLAGS_engine.empty()) {
     stream.set_inference(FLAGS_batch_size, FLAGS_engine);
   }
+  bool b = stream.Open();
   if (!b) {
     LOG(FATAL) << "stream can be opened!";
     return -1;

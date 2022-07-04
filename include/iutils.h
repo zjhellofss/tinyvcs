@@ -2,8 +2,8 @@
 // Created by fss on 22-6-13.
 //
 
-#ifndef TINYVCS_INCLUDE_IMAGE_UTILS_H_
-#define TINYVCS_INCLUDE_IMAGE_UTILS_H_
+#ifndef TINYVCS_INCLUDE_IUTILS_H_
+#define TINYVCS_INCLUDE_IUTILS_H_
 #include "opencv2/opencv.hpp"
 
 void letterbox(const cv::Mat &image, cv::Mat &out_image,
@@ -17,4 +17,4 @@ void letterbox(const cv::Mat &image, cv::Mat &out_image,
 size_t vectorProduct(const std::vector<int64_t> &vector);
 
 void scaleCoords(const cv::Size &image_shape, cv::Rect &coords, const cv::Size &image_original_shape);
-#endif //TINYVCS_INCLUDE_IMAGE_UTILS_H_
+#endif //TINYVCS_INCLUDE_IUTILS_H_

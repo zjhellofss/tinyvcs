@@ -9,10 +9,9 @@
 #include "boost/range/combine.hpp"
 #include "json/jsonbuilder.h"
 #include "glog/logging.h"
-#include "tick.h"
 
 #include "player.h"
-#include "image_utils.h"
+#include "iutils.h"
 #include "infer.h"
 
 void VideoStream::Run() {
@@ -42,7 +41,7 @@ bool VideoStream::Open() {
     std::shared_ptr<Connection> connection = std::make_shared<Connection>();
     bool is_open = connection->Connect(subscription);
     if (!is_open) {
-      LOG(FATAL) << "Can not connect to " << subscription;
+      LOG(FATAL) << "can not connect to " << subscription;
       return false;
     } else {
       connnections_.push_back(connection);
@@ -59,25 +58,23 @@ void VideoStream::Show() {
   while (true) {
     Frame f;
     for (;;) {
-      if (show_frames_.read_available()) {
-        bool success = show_frames_.pop(f);
-        if (success) {
-          break;
-        }
+      bool success = show_frames_.pop(f);
+      if (success) {
+        break;
       }
 
-      if (!this->player_->is_runnable() && !show_frames_.read_available()) {
+      if (!this->player_->is_runnable()) {
         break;
       }
     }
-    auto detections = f.detections_;
-    cv::Mat image = f.image_;
-    for (const auto &detection : detections) {
-      cv::rectangle(image, detection.box, cv::Scalar(255, 0, 0), 8);
-    }
-    if (!this->player_->is_runnable() && !show_frames_.read_available()) {
+    if (!this->player_->is_runnable() && f.detections_.empty()) {
       break;
     }
+    auto detections = f.detections_;
+//    cv::Mat image = f.image_;
+//    for (const auto &detection : detections) {
+//      cv::rectangle(image, detection.box, cv::Scalar(255, 0, 0), 8);
+//    }
   }
 }
 
@@ -86,14 +83,12 @@ void VideoStream::Infer() {
   std::vector<Frame> frames;
   while (true) {
     for (;;) {
-      if (frames_.read_available()) {
-        Frame f;
-        bool read_success = frames_.pop(f);
-        if (read_success) {
-          images.push_back(f.preprocess_image_);
-          frames.push_back(f);
-          break;
-        }
+      Frame f;
+      bool read_success = frames_.pop(f);
+      if (read_success) {
+        images.push_back(f.preprocess_image_);
+        frames.push_back(f);
+        break;
       }
 
       if (!this->player_->is_runnable()) {
@@ -102,6 +97,7 @@ void VideoStream::Infer() {
     }
 
     if (!this->player_->is_runnable() && images.size() != batch_) {
+      LOG(ERROR) << "image number do not equal batch and this player quited!";
       break;
     }
 
@@ -117,11 +113,9 @@ void VideoStream::Infer() {
       }
       images.clear();
       frames.clear();
-      if (!this->player_->is_runnable()) {
-        break;
-      }
     }
   }
+  LOG(ERROR) << "infer process is exited!";
 }
 
 void VideoStream::ReadImages() {
@@ -147,7 +141,7 @@ void VideoStream::ReadImages() {
         break;
     }
   }
-  LOG(INFO) << "read images process is exited!";
+  LOG(ERROR) << "read images process is exited!";
 }
 
 void VideoStream::set_inference(size_t batch, const std::string &engine_file) {

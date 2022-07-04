@@ -1,7 +1,8 @@
 //
 // Created by fss on 22-6-13.
 //
-#include "image_utils.h"
+#include "iutils.h"
+
 void letterbox(const cv::Mat &image, cv::Mat &out_image,
                const cv::Size &new_shape,
                const cv::Scalar &color,
@@ -45,7 +46,6 @@ void letterbox(const cv::Mat &image, cv::Mat &out_image,
   int bottom = int(std::round(dh + 0.1f));
   int left = int(std::round(dw - 0.1f));
   int right = int(std::round(dw + 0.1f));
-//  cv::cvtColor(out_image, out_image, cv::COLOR_RGB2BGR);
   cv::copyMakeBorder(out_image, out_image, top, bottom, left, right, cv::BORDER_CONSTANT, color);
 }
 

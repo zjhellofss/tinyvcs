@@ -14,7 +14,7 @@
 
 #include "ffmpeg.h"
 #include "frame.h"
-#include "image_utils.h"
+#include "iutils.h"
 #include "convert.h"
 
 static boost::circular_buffer<std::shared_ptr<AVPacket>> packets_pool_;
@@ -67,7 +67,7 @@ void Player::ReadPackets() {
       av_make_error_string(err_msg, msg_len, ret);
       LOG(ERROR) << "Read paket error: " << err_msg;
       if (ret == AVERROR_EOF || avio_feof(fmt_ctx_->pb)) {
-        LOG(WARNING) << "Media meet EOF";
+        LOG(ERROR) << "Media meet EOF";
       }
       break;
     }
@@ -77,7 +77,7 @@ void Player::ReadPackets() {
     frames_.push(packet); //fixme push success?
   }
   is_runnable_ = false;
-  LOG(WARNING) << "read packet process is exited!";
+  LOG(ERROR) << "read packet process is exited!";
 }
 
 void Player::DecodePackets() {
@@ -93,11 +93,9 @@ void Player::DecodePackets() {
     }
     std::shared_ptr<AVPacket> packet;
     for (;;) {
-      if (this->frames_.read_available()) {
-        bool read_success = this->frames_.pop(packet);
-        if (read_success && packet) {
-          break;
-        }
+      bool read_success = this->frames_.pop(packet);
+      if (read_success && packet) {
+        break;
       }
       if (!is_runnable_)
         break;
@@ -136,6 +134,10 @@ void Player::DecodePackets() {
 
     AVFrame *tmp_frame = nullptr;
 
+    /***
+     *  Convert cuda frame here
+     *  Please call cuda/hw_decode.cpp ConvertFrame function on "frame"
+     */
     if (Player::hwformat_ != AVPixelFormat::AV_PIX_FMT_NONE && frame->format == Player::hwformat_) {
       if (av_hwframe_transfer_data(sw_frame.get(), (const AVFrame *) frame.get(), 0) < 0) {
         LOG(ERROR) << "Error transferring the data to system memory";
@@ -147,7 +149,7 @@ void Player::DecodePackets() {
     }
 
     if (!tmp_frame) {
-      LOG(ERROR) << "Read empty frame or error format";
+      LOG(ERROR) << "read empty frame or error format";
       continue;
     }
 
@@ -168,7 +170,7 @@ void Player::DecodePackets() {
   }
 
   is_runnable_ = false;
-  LOG(WARNING) << "Decode packet process is exited!";
+  LOG(ERROR) << "Decode packet process is exited!";
 }
 
 void Player::Run() {
@@ -210,13 +212,13 @@ bool Player::Open() {
       ss << fmt::format(" %s", av_hwdevice_get_type_name(hw_type));
     ss << "\n";
     std::string error_message = ss.str();
-    LOG(WARNING) << error_message;
+    LOG(ERROR) << error_message;
     has_cuda = false;
   }
 
   fmt_ctx_ = avformat_alloc_context();
   if (fmt_ctx_ == nullptr) {
-    LOG(ERROR) << "avformat_alloc_context failed";
+    LOG(FATAL) << "avformat_alloc_context failed";
     return false;
   }
   av_dict_set(&fmt_opts_, "rtsp_transport", "tcp", 0);
@@ -229,14 +231,14 @@ bool Player::Open() {
   AVInputFormat *ifmt = nullptr;
   int ret = avformat_open_input(&fmt_ctx_, input_rtsp_.c_str(), ifmt, &fmt_opts_);
   if (ret != 0) {
-    LOG(ERROR) << fmt::format("Open input file[{}] failed: {}", input_rtsp_.c_str(), ret);
+    LOG(FATAL) << fmt::format("Open input file[{}] failed: {}", input_rtsp_.c_str(), ret);
     return false;
   }
   fmt_ctx_->interrupt_callback.callback = nullptr;
 
   ret = avformat_find_stream_info(fmt_ctx_, nullptr);
   if (ret != 0) {
-    LOG(ERROR) << fmt::format("Can not find stream: {}", ret);
+    LOG(FATAL) << fmt::format("Can not find stream: {}", ret);
     return false;
   }
   LOG(INFO) << fmt::format("stream_num={}", fmt_ctx_->nb_streams);
@@ -248,7 +250,7 @@ bool Player::Open() {
   LOG(INFO) << fmt::format("audio_stream_index={:d}", audio_stream_index_);
   LOG(INFO) << fmt::format("subtitle_stream_index={:d}", subtitle_stream_index_);
   if (video_stream_index_ < 0) {
-    LOG(ERROR) << ("Can not find video stream");
+    LOG(FATAL) << ("Can not find video stream");
     return false;
   }
 
@@ -264,7 +266,7 @@ bool Player::Open() {
 
   codec = avcodec_find_decoder(codec_param->codec_id);
   if (codec == nullptr) {
-    LOG(ERROR) << "Can not find decoder " << avcodec_get_name(codec_param->codec_id);
+    LOG(FATAL) << "Can not find decoder " << avcodec_get_name(codec_param->codec_id);
     return false;
   }
 
@@ -272,7 +274,7 @@ bool Player::Open() {
 
   codec_ctx_ = avcodec_alloc_context3(codec);
   if (codec_ctx_ == nullptr) {
-    LOG(ERROR) << "avcodec_alloc_context3";
+    LOG(FATAL) << "avcodec_alloc_context3";
     return false;
   }
 
@@ -296,7 +298,7 @@ bool Player::Open() {
 
   ret = avcodec_parameters_to_context(codec_ctx_, codec_param);
   if (ret != 0) {
-    LOG(ERROR) << fmt::format("avcodec_parameters_to_context error: {}", ret);
+    LOG(FATAL) << fmt::format("avcodec_parameters_to_context error: {}", ret);
     return false;
   }
 
@@ -311,7 +313,7 @@ bool Player::Open() {
   }
   ret = avcodec_open2(codec_ctx_, codec, &codec_opts_);
   if (ret != 0) {
-    LOG(ERROR) << fmt::format("Can not open software codec error: {}", ret);
+    LOG(FATAL) << fmt::format("Can not open software codec error: {}", ret);
     return false;
   }
   video_stream->discard = AVDISCARD_DEFAULT;
@@ -335,7 +337,7 @@ bool Player::Open() {
   int sh = codec_ctx_->height;
   src_pixel_fmt = codec_ctx_->pix_fmt;
   if (sw <= 0 || sh <= 0 || src_pixel_fmt == AV_PIX_FMT_NONE) {
-    LOG(ERROR) << "Get pixel format error";
+    LOG(FATAL) << "Get pixel format error";
     return false;
   }
   dw_ = sw >> 2 << 2;
@@ -344,7 +346,7 @@ bool Player::Open() {
   sws_context_ = sws_getContext(sw, sh, src_pixel_fmt, dw_, dh_, dst_pixel_fmt, SWS_BICUBIC,
                                 nullptr, nullptr, nullptr);
   if (!sws_context_) {
-    LOG(ERROR) << "sws_getContext failed";
+    LOG(FATAL) << "sws_getContext failed";
     return false;
   }
   linesize_[0] = dw_ * 3;
@@ -405,14 +407,12 @@ Player::~Player() {
 std::optional<Frame> Player::get_image() {
   Frame frame;
   for (;;) {
-    if (this->decoded_images_.read_available()) {
-      bool has_frame = this->decoded_images_.pop(frame);
-      if (has_frame) {
-        return frame;
-      }
+    bool has_frame = this->decoded_images_.pop(frame);
+    if (has_frame) {
+      return frame;
     }
 
-    if (!this->decoded_images_.read_available() && !is_runnable_) {
+    if (!is_runnable_) {
       break;
     }
   }

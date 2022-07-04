@@ -7,7 +7,7 @@ find_package(CUDA REQUIRED)
 
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_CXX_FLAGS "-Wall -Wextra")
-set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_DEBUG  "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 find_package (gflags REQUIRED)
@@ -85,10 +85,11 @@ endif()
 
 aux_source_directory(source/websocket DIR_WEBSOCKET_SRCS)
 aux_source_directory(source/json DIR_JSON_SRCS)
+aux_source_directory(source/cuda DIR_CUDA_SRCS)
 aux_source_directory(source/tensorrt DIR_TENSOR_SRCS)
 aux_source_directory(source DIR_SRCS)
 
-set(ALL_SRCS ${DIR_SRCS} ${DIR_WEBSOCKET_SRCS} ${DIR_JSON_SRCS} ${DIR_TENSOR_SRCS} ${SAMPLE_SRCS} samples/video_test.cpp )
+set(ALL_SRCS ${DIR_SRCS} ${DIR_WEBSOCKET_SRCS} ${DIR_JSON_SRCS} ${DIR_CUDA_SRCS} ${DIR_TENSOR_SRCS} ${SAMPLE_SRCS} samples/video_test.cpp )
 add_executable(tinyvcs ${ALL_SRCS})
 target_include_directories(tinyvcs PRIVATE  ${SWSCALE_INCLUDE_DIR} ${AVCODEC_INCLUDE_DIR} ${AVFORMAT_INCLUDE_DIR} ${AVUTIL_INCLUDE_DIR} ${AVDEVICE_INCLUDE_DIR})
 target_link_libraries(tinyvcs PRIVATE  nvinfer cudart gflags)
