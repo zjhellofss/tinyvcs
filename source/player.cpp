@@ -7,14 +7,16 @@
 #include <memory>
 #include <thread>
 
+#include "opencv2/opencv.hpp"
+#include "opencv2/cudawarping.hpp"
+#include "cuda/hw_decode.h"
 #include "glog/logging.h"
 #include "fmt/core.h"
-#include "opencv2/opencv.hpp"
 #include "tick.h"
 
 #include "ffmpeg.h"
 #include "frame.h"
-#include "iutils.h"
+#include "image_utils.h"
 #include "convert.h"
 
 static boost::circular_buffer<std::shared_ptr<AVPacket>> packets_pool_;
@@ -84,7 +86,6 @@ void Player::DecodePackets() {
   uint64_t pts = 0;
   std::shared_ptr<AVFrame> frame = std::shared_ptr<AVFrame>(av_frame_alloc(), FrameDeleter);
   std::shared_ptr<AVFrame> sw_frame = std::shared_ptr<AVFrame>(av_frame_alloc(), FrameDeleter);
-  cv::Mat image = cv::Mat(this->dh_, this->dw_, CV_8UC3);
 
   while (true) {
     av_frame_unref(frame.get());
@@ -132,40 +133,46 @@ void Player::DecodePackets() {
       continue;
     }
 
-    AVFrame *tmp_frame = nullptr;
+//    AVFrame *tmp_frame = nullptr;
 
     /***
-     *  Convert cuda frame here
+     *  convert cuda frame here
      *  Please call cuda/hw_decode.cpp ConvertFrame function on "frame"
      */
-    if (Player::hwformat_ != AVPixelFormat::AV_PIX_FMT_NONE && frame->format == Player::hwformat_) {
-      if (av_hwframe_transfer_data(sw_frame.get(), (const AVFrame *) frame.get(), 0) < 0) {
-        LOG(ERROR) << "Error transferring the data to system memory";
-      } else {
-        tmp_frame = sw_frame.get();
-      }
-    } else {
-      tmp_frame = frame.get();
-    }
-
-    if (!tmp_frame) {
-      LOG(ERROR) << "read empty frame or error format";
-      continue;
-    }
+//    if (Player::hwformat_ != AVPixelFormat::AV_PIX_FMT_NONE && frame->format == Player::hwformat_) {
+//      if (av_hwframe_transfer_data(sw_frame.get(), (const AVFrame *) frame.get(), 0) < 0) {
+//        LOG(ERROR) << "Error transferring the data to system memory";
+//      } else {
+//        tmp_frame = sw_frame.get();
+//      }
+//    } else {
+//      tmp_frame = frame.get();
+//    }
+//
+//    if (!tmp_frame) {
+//      LOG(ERROR) << "read empty frame or error format";
+//      continue;
+//    }
 
 //    const int h = sws_scale(sws_context_, frame->data, frame->linesize, 0, height,
 //                            &image.data, linesize_);
-    bool convert_success = Convert(tmp_frame, image);
-    if (!convert_success) {
-      LOG(ERROR) << "sws scale convert failed " << tmp_frame->pts;
-    } else {
-      cv::Mat output_image;
-      cv::resize(image, output_image, cv::Size(960, 640));
-      tmp_frame->pts = frame->pts;
-      Frame f(pts, tmp_frame->pts, output_image);
-      this->decoded_images_.push(f);
-      pts += 1;
+    std::optional<cv::cuda::GpuMat> image_gpu_opt = ConvertFrame(frame.get());
+    if (!image_gpu_opt.has_value()) {
+      LOG(ERROR) << "convert frame failed";
     }
+    cv::cuda::GpuMat image_gpu_yuv = image_gpu_opt.value();
+    cv::cuda::GpuMat image_gpu = cv::cuda::createContinuous(image_gpu_yuv.rows, image_gpu_yuv.cols, CV_8UC3);
+    convertFunction(image_gpu_yuv.data,
+                    height,
+                    width,
+                    width,
+                    image_gpu.data,
+                    width * 3);
+
+    cv::cuda::resize(image_gpu, image_gpu, cv::Size(960, 640));
+    Frame f(pts, frame->pts, image_gpu);
+    this->decoded_images_.push(f);
+    pts += 1;
     TOCK(DECODE)
   }
 

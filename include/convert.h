@@ -6,7 +6,7 @@
 #define TINYVCS_INCLUDE_YUV_CONVERT_H_
 struct AVFrame;
 #include "opencv2/opencv.hpp"
+#include "opencv2/cudaimgproc.hpp"
 
-bool Convert(AVFrame *frame, cv::Mat &image);
-
+void convertFunction(const uchar *src, int rows, int cols, size_t src_stride, const uchar *dst, size_t dst_stride);
 #endif //TINYVCS_INCLUDE_YUV_CONVERT_H_

@@ -49,7 +49,7 @@ void Inference::Init() {
   elements_in_all_batch_ = elements_in_one_batch_ * batch_;
 }
 
-std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> &images,
+std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::cuda::GpuMat> &images,
                                                      float conf_thresh,
                                                      float iou_thresh) {
   TICK(ALL)
@@ -72,23 +72,22 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
   std::vector<cv::Mat> chw(channels);
 
   for (size_t i = 0; i < batch_; ++i) {
-    cv::Mat image = images.at(i);
+    cv::cuda::GpuMat image_gpu = images.at(i);
 
-    if (image.rows != rows || image.cols != cols || image.channels() != channels) {
+    if (image_gpu.rows != rows || image_gpu.cols != cols || image_gpu.channels() != channels) {
       LOG(FATAL) << "do not have a same size";
     }
-    LOG_IF(FATAL, image.empty()) << "has empty image";
+    LOG_IF(FATAL, image_gpu.empty()) << "has empty image_gpu";
 
-    cv::cuda::GpuMat image_gpu;
-    image_gpu.upload(image);
-
+    cv::Mat image_output;
+    image_gpu.download(image_output);
     image_gpu.convertTo(image_gpu, CV_32FC3, 1 / 255.);
     std::shared_ptr<float> data_raw = rgb2Planar(reinterpret_cast<float *>(image_gpu.data), rows, cols, channels);
 
     cudaMemcpy(input.get() + i * input_tensor_size,
-                    data_raw.get(),
-                    input_tensor_size * sizeof(float),
-                    cudaMemcpyDeviceToDevice);
+               data_raw.get(),
+               input_tensor_size * sizeof(float),
+               cudaMemcpyDeviceToDevice);
   }
 
   std::vector<float> output(elements_in_all_batch_);

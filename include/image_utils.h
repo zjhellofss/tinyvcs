@@ -6,7 +6,7 @@
 #define TINYVCS_INCLUDE_IMAGE_UTILS_H_
 #include "opencv2/opencv.hpp"
 
-void letterbox(const cv::Mat &image, cv::Mat &out_image,
+void letterbox(const cv::cuda::GpuMat &image, cv::cuda::GpuMat &out_image,
                const cv::Size &new_shape = cv::Size(640, 640),
                const cv::Scalar &color = cv::Scalar(114, 114, 114),
                bool auto_ = false,

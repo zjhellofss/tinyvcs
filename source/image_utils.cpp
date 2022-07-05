@@ -2,8 +2,10 @@
 // Created by fss on 22-6-13.
 //
 #include "image_utils.h"
+#include <opencv2/cudawarping.hpp>
+#include <opencv2/cudaarithm.hpp>
 
-void letterbox(const cv::Mat &image, cv::Mat &out_image,
+void letterbox(const cv::cuda::GpuMat &image, cv::cuda::GpuMat &out_image,
                const cv::Size &new_shape,
                const cv::Scalar &color,
                bool auto_,
@@ -39,14 +41,14 @@ void letterbox(const cv::Mat &image, cv::Mat &out_image,
   dh /= 2.0f;
 
   if (shape.width != new_unpad[0] && shape.height != new_unpad[1]) {
-    cv::resize(image, out_image, cv::Size(new_unpad[0], new_unpad[1]));
+    cv::cuda::resize(image, out_image, cv::Size(new_unpad[0], new_unpad[1]));
   }
 
   int top = int(std::round(dh - 0.1f));
   int bottom = int(std::round(dh + 0.1f));
   int left = int(std::round(dw - 0.1f));
   int right = int(std::round(dw + 0.1f));
-  cv::copyMakeBorder(out_image, out_image, top, bottom, left, right, cv::BORDER_CONSTANT, color);
+  cv::cuda::copyMakeBorder(out_image, out_image, top, bottom, left, right, cv::BORDER_CONSTANT, color);
 }
 
 size_t vectorProduct(const std::vector<int64_t> &vector) {

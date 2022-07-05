@@ -72,17 +72,19 @@ void VideoStream::Show() {
       break;
     }
     auto detections = f.detections_;
-    cv::Mat image = f.image_;
-    for (const auto &detection : detections) {
-      cv::rectangle(image, detection.box, cv::Scalar(255, 0, 0), 8);
-    }
+//    cv::cuda::GpuMat image_gpu = f.image_;
+//    cv::Mat image;
+//    image_gpu.download(image);
+//    for (const auto &detection : detections) {
+//      cv::rectangle(image, detection.box, cv::Scalar(255, 0, 0), 8);
+//    }
 //    cv::imshow("test",image);
 //    cv::waitKey(20);
   }
 }
 
 void VideoStream::Infer() {
-  std::vector<cv::Mat> images;
+  std::vector<cv::cuda::GpuMat> images;
   std::vector<Frame> frames;
   while (true) {
     for (;;) {
@@ -127,7 +129,7 @@ void VideoStream::ReadImages() {
     std::optional<Frame> frame_opt = player_->get_image();
     if (frame_opt.has_value()) {
       Frame f = frame_opt.value();
-      cv::Mat preprocess_image;
+      cv::cuda::GpuMat preprocess_image;
       auto image = f.image_;
       index_frame += 1;
       if (index_frame % duration_) {

@@ -29,7 +29,7 @@ class Inference : private boost::noncopyable {
   }
   void Init();
 
-  std::vector<std::vector<Detection>> Infer(const std::vector<cv::Mat> &images, float conf_thresh, float iou_thresh);
+  std::vector<std::vector<Detection>> Infer(const std::vector<cv::cuda::GpuMat> &images, float conf_thresh, float iou_thresh);
 
  private:
   std::shared_ptr<float> blob_;
