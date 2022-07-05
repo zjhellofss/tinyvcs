@@ -14,8 +14,8 @@
 
 struct Detection {
   cv::Rect box;
-  float conf{};
-  int class_id{};
+  int class_id = 0;
+  float conf = 0.f;
 };
 
 class Inference : private boost::noncopyable {
@@ -44,8 +44,8 @@ class Inference : private boost::noncopyable {
   int elements_in_all_batch_ = 0;
   int output_binding_ = 0;
   int input_binding_ = 0;
-  nvinfer1::Dims input_dims_;
-  nvinfer1::Dims output_dims_;
+  nvinfer1::Dims input_dims_{};
+  nvinfer1::Dims output_dims_{};
 };
 
 #endif //TINYVCS_SOURCE_INFER_H_

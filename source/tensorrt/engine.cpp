@@ -8,7 +8,7 @@
 
 #include "boost/filesystem.hpp"
 #include "glog/logging.h"
-#include "cutils.h"
+#include "cuda_utils.h"
 #include "tensorrt/engine.h"
 #include "fmt/core.h"
 
@@ -112,6 +112,12 @@ void Trt::CopyFromHostToDevice(const std::vector<float> &input,
                                int bind_index) {
   CUDA_CHECK(cudaMemcpyAsync(binding_[bind_index], input.data(),
                              input.size() * sizeof(float), cudaMemcpyHostToDevice, stream_))
+}
+
+void Trt::CopyFromDeviceToDevice(float *input, size_t size,
+                                 int bind_index) {
+  CUDA_CHECK(cudaMemcpyAsync(binding_[bind_index], input,
+                             size * sizeof(float), cudaMemcpyDeviceToDevice, stream_))
 }
 
 void Trt::CopyFromDeviceToHost(std::vector<float> &output, int bind_index) {

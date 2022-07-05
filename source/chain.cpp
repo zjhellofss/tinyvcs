@@ -10,8 +10,8 @@
 #include "json/jsonbuilder.h"
 #include "glog/logging.h"
 
+#include "image_utils.h"
 #include "player.h"
-#include "iutils.h"
 #include "infer.h"
 
 void VideoStream::Run() {
@@ -55,6 +55,7 @@ bool VideoStream::Open() {
 }
 
 void VideoStream::Show() {
+//  cv::namedWindow("test");
   while (true) {
     Frame f;
     for (;;) {
@@ -71,10 +72,12 @@ void VideoStream::Show() {
       break;
     }
     auto detections = f.detections_;
-//    cv::Mat image = f.image_;
-//    for (const auto &detection : detections) {
-//      cv::rectangle(image, detection.box, cv::Scalar(255, 0, 0), 8);
-//    }
+    cv::Mat image = f.image_;
+    for (const auto &detection : detections) {
+      cv::rectangle(image, detection.box, cv::Scalar(255, 0, 0), 8);
+    }
+//    cv::imshow("test",image);
+//    cv::waitKey(20);
   }
 }
 
@@ -132,7 +135,6 @@ void VideoStream::ReadImages() {
       }
       if (this->inference_) {
         letterbox(image, preprocess_image);
-        preprocess_image.convertTo(preprocess_image, CV_32FC3, 1 / 255.0);
         f.set_preprocess_image(preprocess_image);
         frames_.push(f); //fixme push success?
       }

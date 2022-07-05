@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(tinyvcs)
+project(tinyvcs CUDA CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 option(CUDA_USE_STATIC_CUDA_RUNTIME OFF)

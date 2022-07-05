@@ -5,7 +5,8 @@
 #include "infer.h"
 #include "glog/logging.h"
 #include "tick.h"
-#include "iutils.h"
+#include "image_utils.h"
+#include "cuda/preprocess.h"
 
 static void getBestClassInfo(std::vector<float>::iterator it, const int &num_classes,
                              float &best_conf, int &best_class_id) {
@@ -58,8 +59,9 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
     return detections;
   }
   size_t input_tensor_size = vectorProduct({1, input_dims_.d[1], input_dims_.d[2], input_dims_.d[3]});
-  std::vector<float> input(input_tensor_size * batch_);
-  float *input_raw = input.data();
+  float *input_raw = nullptr;
+  cudaMalloc((void **) &input_raw, sizeof(float) * input_tensor_size * batch_);
+  std::shared_ptr<float> input = std::shared_ptr<float>(input_raw, cudaFree);
 
   int cols = images.at(0).cols;
   int rows = images.at(0).rows;
@@ -70,23 +72,27 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::Mat> 
   std::vector<cv::Mat> chw(channels);
 
   for (size_t i = 0; i < batch_; ++i) {
-    float *data_raw = blob_.get();
-    const cv::Mat &image = images.at(i);
+    cv::Mat image = images.at(i);
+
     if (image.rows != rows || image.cols != cols || image.channels() != channels) {
       LOG(FATAL) << "do not have a same size";
     }
     LOG_IF(FATAL, image.empty()) << "has empty image";
 
-    cv::Size float_image_size{image.cols, image.rows};
-    for (int j = 0; j < image.channels(); ++j) {
-      chw[j] = cv::Mat(float_image_size, CV_32FC1, data_raw + j * float_image_size.width * float_image_size.height);
-    }
-    cv::split(image, chw);
-    memcpy(input_raw + i * input_tensor_size, data_raw, input_tensor_size * sizeof(float));
+    cv::cuda::GpuMat image_gpu;
+    image_gpu.upload(image);
+
+    image_gpu.convertTo(image_gpu, CV_32FC3, 1 / 255.);
+    std::shared_ptr<float> data_raw = rgb2Planar(reinterpret_cast<float *>(image_gpu.data), rows, cols, channels);
+
+    cudaMemcpy(input.get() + i * input_tensor_size,
+                    data_raw.get(),
+                    input_tensor_size * sizeof(float),
+                    cudaMemcpyDeviceToDevice);
   }
 
   std::vector<float> output(elements_in_all_batch_);
-  onnx_net_->CopyFromHostToDevice(input, input_binding_);
+  onnx_net_->CopyFromDeviceToDevice(input.get(), input_tensor_size * batch_, input_binding_);
   onnx_net_->Forward();
   onnx_net_->CopyFromDeviceToHost(output, output_binding_);
 
