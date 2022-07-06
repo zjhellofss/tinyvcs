@@ -66,10 +66,6 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::cuda:
   int cols = images.at(0).cols;
   int rows = images.at(0).rows;
   int channels = images.at(0).channels();
-  if (!blob_) {
-    blob_ = std::unique_ptr<float>(new float[rows * cols * channels]);
-  }
-  std::vector<cv::Mat> chw(channels);
 
   for (size_t i = 0; i < batch_; ++i) {
     cv::cuda::GpuMat image_gpu = images.at(i);

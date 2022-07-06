@@ -94,7 +94,7 @@ __global__ void convert2RGB(const uchar *src,
   }
 }
 
-void convertFunction(const uchar *src, int rows, int cols, size_t src_stride, const uchar *dst, size_t dst_stride) {
+void convertYUV(const uchar *src, int rows, int cols, size_t src_stride, const uchar *dst, size_t dst_stride) {
   if (rows < 0 || cols < 0) {
     return;
   }

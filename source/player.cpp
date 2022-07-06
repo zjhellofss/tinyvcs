@@ -67,9 +67,9 @@ void Player::ReadPackets() {
       const int msg_len = 512;
       char err_msg[msg_len] = {0};
       av_make_error_string(err_msg, msg_len, ret);
-      LOG(ERROR) << "Read paket error: " << err_msg;
+      LOG(ERROR) << "read paket error: " << err_msg;
       if (ret == AVERROR_EOF || avio_feof(fmt_ctx_->pb)) {
-        LOG(ERROR) << "Media meet EOF";
+        LOG(ERROR) << "media meet EOF";
       }
       break;
     }
@@ -159,15 +159,16 @@ void Player::DecodePackets() {
     std::optional<cv::cuda::GpuMat> image_gpu_opt = ConvertFrame(frame.get());
     if (!image_gpu_opt.has_value()) {
       LOG(ERROR) << "convert frame failed";
+      continue;
     }
     cv::cuda::GpuMat image_gpu_yuv = image_gpu_opt.value();
     cv::cuda::GpuMat image_gpu = cv::cuda::createContinuous(image_gpu_yuv.rows, image_gpu_yuv.cols, CV_8UC3);
-    convertFunction(image_gpu_yuv.data,
-                    height,
-                    width,
-                    width,
-                    image_gpu.data,
-                    width * 3);
+    convertYUV(image_gpu_yuv.data,
+               height,
+               width,
+               width,
+               image_gpu.data,
+               width * 3);
 
     cv::cuda::resize(image_gpu, image_gpu, cv::Size(960, 640));
     Frame f(pts, frame->pts, image_gpu);
@@ -177,7 +178,7 @@ void Player::DecodePackets() {
   }
 
   is_runnable_ = false;
-  LOG(ERROR) << "Decode packet process is exited!";
+  LOG(ERROR) << "decode packet process is exited!";
 }
 
 void Player::Run() {
@@ -213,8 +214,8 @@ bool Player::Open() {
   bool has_cuda = true;
   if (hw_type == AV_HWDEVICE_TYPE_NONE) {
     std::stringstream ss;
-    ss << fmt::format("Device type %s is not supported.\n", "cuda");
-    ss << std::string("Available device types:");
+    ss << fmt::format("device type %s is not supported.\n", "cuda");
+    ss << std::string("available device types:");
     while ((hw_type = av_hwdevice_iterate_types(hw_type)) != AV_HWDEVICE_TYPE_NONE)
       ss << fmt::format(" %s", av_hwdevice_get_type_name(hw_type));
     ss << "\n";
@@ -238,14 +239,14 @@ bool Player::Open() {
   AVInputFormat *ifmt = nullptr;
   int ret = avformat_open_input(&fmt_ctx_, input_rtsp_.c_str(), ifmt, &fmt_opts_);
   if (ret != 0) {
-    LOG(FATAL) << fmt::format("Open input file[{}] failed: {}", input_rtsp_.c_str(), ret);
+    LOG(FATAL) << fmt::format("open input file[{}] failed: {}", input_rtsp_.c_str(), ret);
     return false;
   }
   fmt_ctx_->interrupt_callback.callback = nullptr;
 
   ret = avformat_find_stream_info(fmt_ctx_, nullptr);
   if (ret != 0) {
-    LOG(FATAL) << fmt::format("Can not find stream: {}", ret);
+    LOG(FATAL) << fmt::format("can not find stream: {}", ret);
     return false;
   }
   LOG(INFO) << fmt::format("stream_num={}", fmt_ctx_->nb_streams);
@@ -273,7 +274,7 @@ bool Player::Open() {
 
   codec = avcodec_find_decoder(codec_param->codec_id);
   if (codec == nullptr) {
-    LOG(FATAL) << "Can not find decoder " << avcodec_get_name(codec_param->codec_id);
+    LOG(FATAL) << "can not find decoder " << avcodec_get_name(codec_param->codec_id);
     return false;
   }
 
@@ -290,7 +291,7 @@ bool Player::Open() {
       const AVCodecHWConfig *config = avcodec_get_hw_config(codec, i);
       if (!config) {
         char error_buf[512] = {0};
-        snprintf(error_buf, 512, "Decoder %s does not support device type %s",
+        snprintf(error_buf, 512, "decoder %s does not support device type %s",
                  codec->name, av_hwdevice_get_type_name(hw_type));
         LOG(FATAL) << error_buf;
         return false;
@@ -320,9 +321,10 @@ bool Player::Open() {
   }
   ret = avcodec_open2(codec_ctx_, codec, &codec_opts_);
   if (ret != 0) {
-    LOG(FATAL) << fmt::format("Can not open software codec error: {}", ret);
+    LOG(FATAL) << fmt::format("can not open software codec error: {}", ret);
     return false;
   }
+
   video_stream->discard = AVDISCARD_DEFAULT;
 
   if (video_stream->avg_frame_rate.num && video_stream->avg_frame_rate.den) {
@@ -344,7 +346,7 @@ bool Player::Open() {
   int sh = codec_ctx_->height;
   src_pixel_fmt = codec_ctx_->pix_fmt;
   if (sw <= 0 || sh <= 0 || src_pixel_fmt == AV_PIX_FMT_NONE) {
-    LOG(FATAL) << "Get pixel format error";
+    LOG(FATAL) << "get pixel format error";
     return false;
   }
   dw_ = sw >> 2 << 2;
@@ -353,7 +355,7 @@ bool Player::Open() {
   sws_context_ = sws_getContext(sw, sh, src_pixel_fmt, dw_, dh_, dst_pixel_fmt, SWS_BICUBIC,
                                 nullptr, nullptr, nullptr);
   if (!sws_context_) {
-    LOG(FATAL) << "sws_getContext failed";
+    LOG(FATAL) << "sws get context failed";
     return false;
   }
   linesize_[0] = dw_ * 3;
