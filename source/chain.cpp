@@ -72,8 +72,8 @@ void VideoStream::Show() {
       break;
     }
     auto detections = f.detections_;
-//    cv::cuda::GpuMat image_gpu = f.image_;
-//    cv::Mat image;
+    cv::cuda::GpuMat image_gpu = f.image_;
+    cv::Mat image;
 //    image_gpu.download(image);
 //    for (const auto &detection : detections) {
 //      cv::rectangle(image, detection.box, cv::Scalar(255, 0, 0), 8);
@@ -107,7 +107,7 @@ void VideoStream::Infer() {
     }
 
     if (inference_ && images.size() == batch_) {
-      std::vector<std::vector<Detection>> detections = inference_->Infer(images, 0.2f, 0.2f);
+      std::vector<std::vector<Detection>> detections = inference_->Infer(images, 0.45f, 0.45f);
       LOG(INFO) << "stream id: " << stream_id_ << " remain frames: " << 1024 - frames_.write_available();
       for (auto tup : boost::combine(detections, frames)) {
         std::vector<Detection> detection;

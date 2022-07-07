@@ -37,6 +37,10 @@ static void PacketDeleter(AVPacket *packet) {
   }
 }
 
+static bool isKey(const std::shared_ptr<AVFrame> &frame) {
+  return (frame->flags & AV_PKT_FLAG_KEY) != 0;
+}
+
 static void FrameDeleter(AVFrame *frame) {
   if (frame != nullptr) {
     av_frame_unref(frame);
@@ -83,7 +87,7 @@ void Player::ReadPackets() {
 }
 
 void Player::DecodePackets() {
-  uint64_t pts = 0;
+  uint64_t index = 0;
   std::shared_ptr<AVFrame> frame = std::shared_ptr<AVFrame>(av_frame_alloc(), FrameDeleter);
   std::shared_ptr<AVFrame> sw_frame = std::shared_ptr<AVFrame>(av_frame_alloc(), FrameDeleter);
 
@@ -105,7 +109,7 @@ void Player::DecodePackets() {
     if (!packet) {
       break;
     }
-    TICK(DECODE)
+//    TICK(DECODE)
     int ret = avcodec_send_packet(codec_ctx_, packet.get());
     if (ret != 0) {
       const int msg_len = 512;
@@ -129,33 +133,10 @@ void Player::DecodePackets() {
     int width = frame->width;
     int height = frame->height;
     if (width == 0 || height == 0 || width != dw_ || height != dh_) {
-      LOG(ERROR) << "stream id: " << stream_idx_ << " frame don't have correct size pts: " << frame->pts;
+      LOG(ERROR) << "stream id: " << stream_idx_ << " frame don't have correct size index: " << frame->pts;
       continue;
     }
 
-//    AVFrame *tmp_frame = nullptr;
-
-    /***
-     *  convert cuda frame here
-     *  Please call cuda/hw_decode.cpp ConvertFrame function on "frame"
-     */
-//    if (Player::hwformat_ != AVPixelFormat::AV_PIX_FMT_NONE && frame->format == Player::hwformat_) {
-//      if (av_hwframe_transfer_data(sw_frame.get(), (const AVFrame *) frame.get(), 0) < 0) {
-//        LOG(ERROR) << "Error transferring the data to system memory";
-//      } else {
-//        tmp_frame = sw_frame.get();
-//      }
-//    } else {
-//      tmp_frame = frame.get();
-//    }
-//
-//    if (!tmp_frame) {
-//      LOG(ERROR) << "read empty frame or error format";
-//      continue;
-//    }
-
-//    const int h = sws_scale(sws_context_, frame->data, frame->linesize, 0, height,
-//                            &image.data, linesize_);
     std::optional<cv::cuda::GpuMat> image_gpu_opt = ConvertFrame(frame.get());
     if (!image_gpu_opt.has_value()) {
       LOG(ERROR) << "convert frame failed";
@@ -171,10 +152,11 @@ void Player::DecodePackets() {
                width * 3);
 
     cv::cuda::resize(image_gpu, image_gpu, cv::Size(960, 640));
-    Frame f(pts, frame->pts, image_gpu);
+    Frame f(isKey(frame), frame->pts, frame->pkt_dts, index, image_gpu);
+    LOG(INFO) << f.to_string();
     this->decoded_images_.push(f);
-    pts += 1;
-    TOCK(DECODE)
+    index += 1;
+//    TOCK(DECODE)
   }
 
   is_runnable_ = false;
