@@ -8,7 +8,7 @@
 
 #include "boost/filesystem.hpp"
 #include "glog/logging.h"
-#include "cuda_utils.h"
+#include "cuda/cuda_utils.h"
 #include "tensorrt/engine.h"
 #include "fmt/core.h"
 

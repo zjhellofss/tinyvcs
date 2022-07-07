@@ -12,6 +12,7 @@
 #include <boost/lockfree/spsc_queue.hpp>
 #include <boost/circular_buffer.hpp>
 
+#include "sync_queue.h"
 #include "ffmpeg.h"
 #include "frame.h"
 
@@ -69,8 +70,8 @@ class Player : private boost::noncopyable {
   AVBufferRef *hw_device_ctx_ = nullptr;
   int stream_idx_ = 0;
   std::atomic_bool is_runnable_ = false;
-  boost::lockfree::spsc_queue<std::shared_ptr<AVPacket>, boost::lockfree::capacity<1024>> frames_;
-  boost::lockfree::spsc_queue<Frame, boost::lockfree::capacity<1024>> decoded_images_;
+  SynchronizedQueue<std::shared_ptr<AVPacket>, 1024> frames_;
+  SynchronizedQueue<Frame, 1024> decoded_images_;
  public:
   int64_t block_starttime_ = time(nullptr);
   int64_t block_timeout_ = 10;

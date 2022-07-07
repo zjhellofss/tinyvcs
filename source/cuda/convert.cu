@@ -4,7 +4,7 @@
 #include "convert.h"
 #include <device_launch_parameters.h>
 #include "cuda/preprocess.h"
-#include "cuda_utils.h"
+#include "cuda/cuda_utils.h"
 #include "ffmpeg.h"
 
 #define NVXX1_CY 1220542

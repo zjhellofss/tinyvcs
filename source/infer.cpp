@@ -8,8 +8,8 @@
 #include "image_utils.h"
 #include "cuda/preprocess.h"
 
-static void getBestClassInfo(std::vector<float>::iterator it, const int &num_classes,
-                             float &best_conf, int &best_class_id) {
+static void GetBestClassInfo(std::vector<float>::iterator it, const int &num_classes,
+                      float &best_conf, int &best_class_id) {
   // first 5 element are box and obj confidence
   best_class_id = 5;
   best_conf = 0;
@@ -109,7 +109,7 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::cuda:
 
         float obj_conf;
         int class_id;
-        getBestClassInfo(it, num_classes_, obj_conf, class_id);
+        GetBestClassInfo(it, num_classes_, obj_conf, class_id);
 
         float confidence = cls_conf * obj_conf;
 

@@ -11,6 +11,7 @@
 #include "websocket/client.h"
 
 #include "tensorrt/engine.h"
+#include "sync_queue.h"
 #include "player.h"
 #include "infer.h"
 
@@ -54,8 +55,8 @@ class VideoStream {
   std::vector<std::string> subscriptions_;
   std::vector<std::thread> threads_;
   std::vector<std::shared_ptr<Connection>> connnections_;
-  boost::lockfree::spsc_queue<Frame, boost::lockfree::capacity<1024>> frames_;
-  boost::lockfree::spsc_queue<Frame, boost::lockfree::capacity<1024>> show_frames_;
+  SynchronizedQueue<Frame, 1024> frames_;
+  SynchronizedQueue<Frame, 1024> show_frames_;
   std::shared_ptr<Player> player_;
   std::unique_ptr<Inference> inference_;
 };
