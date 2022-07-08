@@ -8,8 +8,8 @@
 #include "image_utils.h"
 #include "cuda/preprocess.h"
 
-static void GetBestClassInfo(std::vector<float>::iterator it, const int &num_classes,
-                      float &best_conf, int &best_class_id) {
+static void getBestClassInfo(std::vector<float>::iterator it, const int &num_classes,
+                             float &best_conf, int &best_class_id) {
   // first 5 element are box and obj confidence
   best_class_id = 5;
   best_conf = 0;
@@ -50,35 +50,39 @@ void Inference::Init() {
 }
 
 std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::cuda::GpuMat> &images,
+                                                     int width,
+                                                     int height,
                                                      float conf_thresh,
                                                      float iou_thresh) {
-  TICK(ALL)
   std::vector<std::vector<Detection>> detections;
   if (images.size() != batch_) {
     LOG(ERROR) << "infer images not equal to batch";
     return detections;
   }
+  auto start = std::chrono::steady_clock::now();
+
   size_t input_tensor_size = vectorProduct({1, input_dims_.d[1], input_dims_.d[2], input_dims_.d[3]});
   float *input_raw = nullptr;
   cudaMalloc((void **) &input_raw, sizeof(float) * input_tensor_size * batch_);
   std::shared_ptr<float> input = std::shared_ptr<float>(input_raw, cudaFree);
 
-  int cols = images.at(0).cols;
-  int rows = images.at(0).rows;
-  int channels = images.at(0).channels();
+//  int cols = images.at(0).cols;
+//  int rows = images.at(0).rows;
+//  int channels = images.at(0).channels();
 
   for (size_t i = 0; i < batch_; ++i) {
     cv::cuda::GpuMat image_gpu = images.at(i);
 
-    if (image_gpu.rows != rows || image_gpu.cols != cols || image_gpu.channels() != channels) {
-      LOG(FATAL) << "do not have a same size";
+    if (image_gpu.empty() || image_gpu.size().width != width || image_gpu.size().height != height
+        || image_gpu.channels() != 3) {
+      LOG(ERROR) << "has wrong gpu image";
+      return detections;
     }
-    LOG_IF(FATAL, image_gpu.empty()) << "has empty image_gpu";
 
     cv::Mat image_output;
     image_gpu.download(image_output);
     image_gpu.convertTo(image_gpu, CV_32FC3, 1 / 255.);
-    std::shared_ptr<float> data_raw = rgb2Planar(reinterpret_cast<float *>(image_gpu.data), rows, cols, channels);
+    std::shared_ptr<float> data_raw = rgb2Plane(reinterpret_cast<float *>(image_gpu.data), height, width, 3);
 
     cudaMemcpy(input.get() + i * input_tensor_size,
                data_raw.get(),
@@ -91,6 +95,7 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::cuda:
   onnx_net_->Forward();
   onnx_net_->CopyFromDeviceToHost(output, output_binding_);
 
+  size_t detections_sizes = 0;
   for (size_t i = 0; i < batch_; ++i) {
     std::vector<cv::Rect> boxes;
     std::vector<float> confs;
@@ -102,18 +107,17 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::cuda:
       if (cls_conf > conf_thresh) {
         int center_x = (int) (it[0]);
         int center_y = (int) (it[1]);
-        int width = (int) (it[2]);
-        int height = (int) (it[3]);
-        int left = center_x - width / 2;
-        int top = center_y - height / 2;
+        int box_width = (int) (it[2]);
+        int box_height = (int) (it[3]);
+        int left = center_x - box_width / 2;
+        int top = center_y - box_height / 2;
 
         float obj_conf;
         int class_id;
-        GetBestClassInfo(it, num_classes_, obj_conf, class_id);
-
+        getBestClassInfo(it, num_classes_, obj_conf, class_id);
         float confidence = cls_conf * obj_conf;
 
-        boxes.emplace_back(left, top, width, height);
+        boxes.emplace_back(left, top, box_width, box_height);
         confs.emplace_back(confidence);
         class_ids.emplace_back(class_id);
       }
@@ -132,8 +136,13 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::cuda:
       det.class_id = class_ids[idx];
       detections_batch.emplace_back(det);
     }
+    detections_sizes += detections_batch.size();
     detections.push_back(detections_batch);
   }
-  TOCK_BATCH(ALL, batch_)
+  auto end = std::chrono::steady_clock::now();
+  LOG(INFO) << "infer cost: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() / batch_
+            << " ms"
+            << " infer number: " << detections_sizes;
+
   return detections;
 }

@@ -37,5 +37,5 @@ enum BlockConfiguration0 {
   kBlockShiftY0 = kShiftY1,
 };
 
-std::shared_ptr<float> rgb2Planar(const float *src, int rows, int cols, int channels);
+std::shared_ptr<float> rgb2Plane(const float *src, int rows, int cols, int channels);
 #endif //TINYVCS_INCLUDE_CUDA_PREPROCESS_H_

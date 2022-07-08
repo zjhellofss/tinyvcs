@@ -7,7 +7,6 @@
 #include "fmt/core.h"
 #include "websocket/client.h"
 #include "boost/range/combine.hpp"
-#include "json/jsonbuilder.h"
 #include "glog/logging.h"
 
 #include "image_utils.h"
@@ -107,14 +106,16 @@ void VideoStream::Infer() {
     }
 
     if (inference_ && images.size() == batch_) {
-      std::vector<std::vector<Detection>> detections = inference_->Infer(images, 0.45f, 0.45f);
-      LOG(INFO) << "stream id: " << stream_id_ << " remain frames: " << 1024 - frames_.write_available();
-      for (auto tup : boost::combine(detections, frames)) {
-        std::vector<Detection> detection;
-        Frame frame;
-        boost::tie(detection, frame) = tup;
-        frame.set_detections(detection);
-        show_frames_.push(frame);
+      std::vector<std::vector<Detection>>
+          detections = inference_->Infer(images, this->infer_width_, this->infer_height_, 0.45f, 0.45f);
+      if (detections.size() == images.size()) {
+        for (auto tup : boost::combine(detections, frames)) {
+          std::vector<Detection> detection;
+          Frame frame;
+          boost::tie(detection, frame) = tup;
+          frame.set_detections(detection);
+          show_frames_.push(frame);
+        }
       }
       images.clear();
       frames.clear();
@@ -124,15 +125,14 @@ void VideoStream::Infer() {
 }
 
 void VideoStream::ReadImages() {
-  uint64_t index_frame = 0;
   while (true) {
     std::optional<Frame> frame_opt = player_->get_image();
     if (frame_opt.has_value()) {
       Frame f = frame_opt.value();
       cv::cuda::GpuMat preprocess_image;
       auto image = f.image_;
-      index_frame += 1;
-      if (index_frame % duration_) {
+
+      if (f.index_ % duration_) {
         continue;
       }
       if (this->inference_) {

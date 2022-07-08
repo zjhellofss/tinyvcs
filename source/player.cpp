@@ -22,13 +22,13 @@
 static boost::circular_buffer<std::shared_ptr<AVPacket>> packets_pool_;
 AVPixelFormat  Player::hwformat_ = AVPixelFormat::AV_PIX_FMT_NONE;
 
-static int InterruptCallback(void *opaque);
+static int interruptCallback(void *opaque);
 
-static void PacketDeleter(AVPacket *packet) {
+static void packetDeleter(AVPacket *packet) {
 
   if (packet != nullptr) {
     if (!packets_pool_.full()) {
-      packets_pool_.push_back(std::shared_ptr<AVPacket>(packet, PacketDeleter));
+      packets_pool_.push_back(std::shared_ptr<AVPacket>(packet, packetDeleter));
     } else {
       av_packet_unref(packet);
       av_packet_free(&packet);
@@ -37,11 +37,15 @@ static void PacketDeleter(AVPacket *packet) {
   }
 }
 
-static bool isKey(const std::shared_ptr<AVFrame> &frame) {
-  return (frame->flags & AV_PKT_FLAG_KEY) != 0;
+static bool isKey(const std::shared_ptr<AVPacket> &pkt) {
+  return (pkt->flags & AV_PKT_FLAG_KEY) != 0;
 }
 
-static void FrameDeleter(AVFrame *frame) {
+bool isCorrupted(const std::shared_ptr<AVPacket> &pkt) {
+  return (bool) ((uint32_t) pkt->flags & (uint32_t) AV_PKT_FLAG_CORRUPT);
+}
+
+static void frameDeleter(AVFrame *frame) {
   if (frame != nullptr) {
     av_frame_unref(frame);
     av_frame_free(&frame);
@@ -54,7 +58,7 @@ void Player::ReadPackets() {
     if (!is_runnable_) {
       break;
     }
-    fmt_ctx_->interrupt_callback.callback = InterruptCallback;
+    fmt_ctx_->interrupt_callback.callback = interruptCallback;
     fmt_ctx_->interrupt_callback.opaque = this;
     block_starttime_ = time(nullptr);
     std::shared_ptr<AVPacket> packet;
@@ -62,7 +66,7 @@ void Player::ReadPackets() {
       packet = packets_pool_.front();
       packets_pool_.pop_front();
     } else {
-      packet = std::shared_ptr<AVPacket>(av_packet_alloc(), PacketDeleter);
+      packet = std::shared_ptr<AVPacket>(av_packet_alloc(), packetDeleter);
     }
     auto packet_raw = packet.get();
     int ret = av_read_frame(fmt_ctx_, packet_raw);
@@ -88,8 +92,8 @@ void Player::ReadPackets() {
 
 void Player::DecodePackets() {
   uint64_t index = 0;
-  std::shared_ptr<AVFrame> frame = std::shared_ptr<AVFrame>(av_frame_alloc(), FrameDeleter);
-  std::shared_ptr<AVFrame> sw_frame = std::shared_ptr<AVFrame>(av_frame_alloc(), FrameDeleter);
+  std::shared_ptr<AVFrame> frame = std::shared_ptr<AVFrame>(av_frame_alloc(), frameDeleter);
+  std::shared_ptr<AVFrame> sw_frame = std::shared_ptr<AVFrame>(av_frame_alloc(), frameDeleter);
 
   while (true) {
     av_frame_unref(frame.get());
@@ -109,7 +113,15 @@ void Player::DecodePackets() {
     if (!packet) {
       break;
     }
+
+    if (packet && isCorrupted(packet)) {
+      LOG(ERROR) << "read bad packet";
+      continue;
+    }
+
 //    TICK(DECODE)
+    auto start = std::chrono::steady_clock::now();
+
     int ret = avcodec_send_packet(codec_ctx_, packet.get());
     if (ret != 0) {
       const int msg_len = 512;
@@ -132,6 +144,10 @@ void Player::DecodePackets() {
 
     int width = frame->width;
     int height = frame->height;
+
+    if (frame->pts == AV_NOPTS_VALUE) {
+      continue;
+    }
     if (width == 0 || height == 0 || width != dw_ || height != dh_) {
       LOG(ERROR) << "stream id: " << stream_idx_ << " frame don't have correct size index: " << frame->pts;
       continue;
@@ -152,8 +168,11 @@ void Player::DecodePackets() {
                width * 3);
 
     cv::cuda::resize(image_gpu, image_gpu, cv::Size(960, 640));
-    Frame f(isKey(frame), frame->pts, frame->pkt_dts, index, image_gpu);
-    LOG(INFO) << f.to_string();
+    Frame f(isKey(packet), frame->pts, frame->pkt_dts, index, frame->height, frame->width, image_gpu);
+
+    auto end = std::chrono::steady_clock::now();
+    LOG(INFO) << f.to_string() << " decode costs:"
+              << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()<<" ms";
     this->decoded_images_.push(f);
     index += 1;
 //    TOCK(DECODE)
@@ -178,7 +197,6 @@ void Player::Run() {
 
 Player::Player(int stream_idx, std::string rtsp)
     : input_rtsp_(std::move(rtsp)), stream_idx_(stream_idx) {
-
 }
 
 AVPixelFormat Player::GetHwFormat(AVCodecContext *ctx, const enum AVPixelFormat *pix_fmts) {
@@ -215,7 +233,7 @@ bool Player::Open() {
   av_dict_set(&fmt_opts_, "stimeout", "5000000", 0);   // us
   av_dict_set(&fmt_opts_, "buffer_size", "2048000", 0);
 
-  fmt_ctx_->interrupt_callback.callback = InterruptCallback;
+  fmt_ctx_->interrupt_callback.callback = interruptCallback;
   fmt_ctx_->interrupt_callback.opaque = this;
   block_starttime_ = time(nullptr);
   AVInputFormat *ifmt = nullptr;
@@ -410,7 +428,7 @@ std::optional<Frame> Player::get_image() {
   return std::nullopt;
 }
 
-static int InterruptCallback(void *opaque) {
+static int interruptCallback(void *opaque) {
   if (opaque == nullptr) return 0;
   Player *player = (Player *) opaque;
   if (time(nullptr) - player->block_starttime_ > player->block_timeout_) {

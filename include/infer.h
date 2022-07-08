@@ -10,12 +10,26 @@
 #include "NvInfer.h"
 #include "boost/core/noncopyable.hpp"
 #include "NvInferVersion.h"
+
+#include "nlohmann/json.hpp"
 #include "tensorrt/engine.h"
+
+using json = nlohmann::json;
 
 struct Detection {
   cv::Rect box;
   int class_id = 0;
   float conf = 0.f;
+
+  void to_json(json &j) const {
+    j = json{{"x", this->box.x},
+             {"y", this->box.y},
+             {"height", this->box.height},
+             {"width", this->box.width},
+             {"class_id", this->class_id},
+             {"conf", this->conf}
+    };
+  }
 };
 
 class Inference : private boost::noncopyable {
@@ -29,7 +43,11 @@ class Inference : private boost::noncopyable {
   }
   void Init();
 
-  std::vector<std::vector<Detection>> Infer(const std::vector<cv::cuda::GpuMat> &images, float conf_thresh, float iou_thresh);
+  std::vector<std::vector<Detection>> Infer(const std::vector<cv::cuda::GpuMat> &images,
+                                            int width,
+                                            int height,
+                                            float conf_thresh,
+                                            float iou_thresh);
 
  private:
   std::unique_ptr<Trt> onnx_net_;

@@ -33,6 +33,8 @@ DEFINE_int32(loglevel, 0, "min log level");
 DEFINE_int32(id, 0, "stream id");
 DEFINE_int32(batch_size, 8, "inference batch size");
 DEFINE_int32(duration, 3, "inference duration frame");
+DEFINE_int32(width, 640, "inference image width");
+DEFINE_int32(height, 640, "inference image height");
 
 int main(int argc, char *argv[]) {
 
@@ -44,6 +46,8 @@ int main(int argc, char *argv[]) {
   std::vector<std::string> subscriptions;
   VideoStream stream(FLAGS_id,
                      FLAGS_duration,
+                     FLAGS_height,
+                     FLAGS_width,
                      FLAGS_rtsp,
                      subscriptions);
   if (!FLAGS_engine.empty()) {

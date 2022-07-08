@@ -5,8 +5,8 @@
 #include "cuda/cuda_utils.h"
 #include <opencv2/opencv.hpp>
 
-__global__ void rgb2PlanarKernel(const float *src, int rows, int cols, int channels,
-                                 float *r, float *g, float *b) {
+__global__ void rgb2PlaneKernel(const float *src, int rows, int cols, int channels,
+                                float *r, float *g, float *b) {
   extern __shared__ float3 s_data[];
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
   int tid = threadIdx.x;
@@ -21,7 +21,7 @@ __global__ void rgb2PlanarKernel(const float *src, int rows, int cols, int chann
   b[idx] = pixel.z;
 }
 
-std::shared_ptr<float> rgb2Planar(const float *src, int rows, int cols, int channels) {
+std::shared_ptr<float> rgb2Plane(const float *src, int rows, int cols, int channels) {
   if (rows <= 0 || cols <= 0) {
     return nullptr;
   }
@@ -38,7 +38,7 @@ std::shared_ptr<float> rgb2Planar(const float *src, int rows, int cols, int chan
 
   int threads = kDimX1 << kShiftX1;
   int blocks = (rows * cols + threads - 1) / threads;
-  rgb2PlanarKernel<<<blocks, threads, sizeof(float3) * threads>>>(src, rows, cols, channels, r, g, b);
+  rgb2PlaneKernel<<<blocks, threads, sizeof(float3) * threads>>>(src, rows, cols, channels, r, g, b);
   cudaDeviceSynchronize();
   CUDA_CHECK(cudaGetLastError())
   return planar;
