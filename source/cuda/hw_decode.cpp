@@ -9,6 +9,8 @@
 //ffmpeg
 #include "ffmpeg.h"
 
+static cudaStream_t stream = nullptr;
+
 std::optional<cv::cuda::GpuMat> ConvertFrame(AVFrame *cu_frame) {
   cv::cuda::GpuMat gpu_mat;
   if (cu_frame == nullptr) {
@@ -27,8 +29,9 @@ std::optional<cv::cuda::GpuMat> ConvertFrame(AVFrame *cu_frame) {
   }
 
   int copy_offset = 0;
-  cudaStream_t stream = nullptr;
-  CUDA_CHECK(cudaStreamCreate(&stream));
+  if(!stream)
+    CUDA_CHECK(cudaStreamCreate(&stream))
+
   for (size_t i = 0; i < FF_ARRAY_ELEMS(cu_frame->data) && cu_frame->data[i]; i++) {
     int src_pitch = cu_frame->linesize[i];
     int copy_width = cu_frame->width;
@@ -44,8 +47,5 @@ std::optional<cv::cuda::GpuMat> ConvertFrame(AVFrame *cu_frame) {
     copy_offset += copy_width * copy_height;
   }
 
-  if (stream) {
-    cudaStreamDestroy(stream);
-  }
   return gpu_mat;
 }

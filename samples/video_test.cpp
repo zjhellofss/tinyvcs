@@ -4,11 +4,13 @@
 
 #include <vector>
 #include <string>
-#include <fmt/core.h>
 
+#include "boost/filesystem.hpp"
+#include "fmt/core.h"
 #include "glog/logging.h"
-#include "chain.h"
 #include "gflags/gflags.h"
+
+#include "chain.h"
 
 static bool validateRtsp(const char *flag_name, const std::string &address) {
   if (address.empty()) {
@@ -37,12 +39,20 @@ DEFINE_int32(width, 640, "inference image width");
 DEFINE_int32(height, 640, "inference image height");
 
 int main(int argc, char *argv[]) {
+  namespace fs = boost::filesystem;
 
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(FLAGS_log.data());
   FLAGS_loglevel = 1;
   FLAGS_log_dir = "./log";
   FLAGS_alsologtostderr = true;
+
+  if (!fs::exists(FLAGS_log)) {
+    bool has_create_dir = fs::create_directories(FLAGS_log);
+    if (has_create_dir)
+      LOG(INFO) << "create log dir: " << FLAGS_log;
+  }
+
   std::vector<std::string> subscriptions;
   VideoStream stream(FLAGS_id,
                      FLAGS_duration,
