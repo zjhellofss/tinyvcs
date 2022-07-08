@@ -39,7 +39,7 @@ void ConnectionMeta::OnMessage(const websocketpp::connection_hdl &,
 
 Connection::~Connection() {
   endpoint_.stop_perpetual();
-  if (connection_meta_ && connection_meta_->IsRunnable()) {
+  if (connection_meta_ && connection_meta_->is_runnable()) {
     LOG(INFO) << "Closing connection...";
     websocketpp::lib::error_code ec;
     endpoint_.close(connection_meta_->GetHdl(), websocketpp::close::status::going_away, "", ec);
@@ -94,7 +94,7 @@ bool Connection::Connect(const std::string &uri) {
 
 bool Connection::Send(const std::string &message) {
   websocketpp::lib::error_code ec;
-  if (!connection_meta_ || !connection_meta_->IsRunnable()) {
+  if (!connection_meta_ || !connection_meta_->is_runnable()) {
     LOG(ERROR) << "No connection found";
     return false;
   } else {
@@ -109,5 +109,5 @@ bool Connection::Send(const std::string &message) {
   }
 }
 bool Connection::is_runnable() const {
-  return connection_meta_->IsRunnable();
+  return connection_meta_->is_runnable();
 }

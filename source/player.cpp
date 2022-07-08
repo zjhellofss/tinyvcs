@@ -279,8 +279,6 @@ bool Player::Open() {
   }
 
   AVStream *video_stream = fmt_ctx_->streams[video_stream_index_];
-  video_time_base_num_ = video_stream->time_base.num;
-  video_time_base_den_ = video_stream->time_base.den;
   LOG(INFO) << fmt::format("video_stream time_base={}/{}", video_stream->time_base.num, video_stream->time_base.den);
 
   AVCodecParameters *codec_param = video_stream->codecpar;

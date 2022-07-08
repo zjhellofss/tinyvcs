@@ -10,7 +10,7 @@
 #include "glog/logging.h"
 #include "gflags/gflags.h"
 
-#include "chain.h"
+#include "video_stream.h"
 
 static bool validateRtsp(const char *flag_name, const std::string &address) {
   if (address.empty()) {
@@ -31,7 +31,7 @@ DEFINE_validator(rtsp, &validateRtsp);
 DEFINE_string(engine, "", "model engine for inference");
 DEFINE_string(log, "./log", "log file dir");
 DEFINE_bool(stderr, true, "log to stderr");
-DEFINE_int32(loglevel, 0, "min log level");
+DEFINE_int32(loglevel, 1, "min log level");
 DEFINE_int32(id, 0, "stream id");
 DEFINE_int32(batch_size, 8, "inference batch size");
 DEFINE_int32(duration, 3, "inference duration frame");

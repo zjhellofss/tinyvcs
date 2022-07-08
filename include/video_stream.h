@@ -2,8 +2,8 @@
 // Created by fss on 22-6-9.
 //
 
-#ifndef TINYVCS_INCLUDE_CHAIN_H_
-#define TINYVCS_INCLUDE_CHAIN_H_
+#ifndef TINYVCS_INCLUDE_VIDEO_STREAM_H_
+#define TINYVCS_INCLUDE_VIDEO_STREAM_H_
 #include <string>
 #include <vector>
 #include <thread>
@@ -41,7 +41,7 @@ class VideoStream : private boost::noncopyable {
 
   bool Open();
 
-  void Show();
+  void ProcessResults();
 
   void ReadImages();
 
@@ -67,4 +67,4 @@ class VideoStream : private boost::noncopyable {
   std::unique_ptr<Inference> inference_;
 };
 
-#endif //TINYVCS_INCLUDE_CHAIN_H_
+#endif //TINYVCS_INCLUDE_VIDEO_STREAM_H_

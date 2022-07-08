@@ -55,8 +55,6 @@ class Player : private boost::noncopyable {
   AVDictionary *fmt_opts_ = nullptr;
   AVDictionary *codec_opts_ = nullptr;
   int video_stream_index_ = -1;
-  int video_time_base_num_ = -1;
-  int video_time_base_den_ = -1;
 
   int dw_ = 0;
   int dh_ = 0;

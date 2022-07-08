@@ -21,7 +21,7 @@ class ConnectionMeta {
 
   void OnMessage(const websocketpp::connection_hdl &, const client::message_ptr &msg);
 
-  bool IsRunnable() const {
+  bool is_runnable() const {
     return this->is_runnable_;
   }
 

@@ -1,4 +1,4 @@
-#include "chain.h"
+#include "video_stream.h"
 #include <memory>
 #include <utility>
 #include <vector>
@@ -26,7 +26,7 @@ void VideoStream::Run() {
     threads_.push_back(std::move(t2));
 
     std::thread t3([this]() {
-      this->Show();
+      this->ProcessResults();
     });
     threads_.push_back(std::move(t3));
   }
@@ -53,7 +53,7 @@ bool VideoStream::Open() {
   return true;
 }
 
-void VideoStream::Show() {
+void VideoStream::ProcessResults() {
 //  cv::namedWindow("test");
   while (true) {
     Frame f;
