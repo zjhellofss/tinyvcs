@@ -19,8 +19,9 @@
 #include "image_utils.h"
 #include "convert.h"
 
-static boost::circular_buffer<std::shared_ptr<AVPacket>> packets_pool_;
 AVPixelFormat  Player::hwformat_ = AVPixelFormat::AV_PIX_FMT_NONE;
+
+static boost::circular_buffer<std::shared_ptr<AVPacket>> packets_pool_;
 
 static int interruptCallback(void *opaque);
 
@@ -41,8 +42,16 @@ static bool isKey(const std::shared_ptr<AVPacket> &pkt) {
   return (pkt->flags & AV_PKT_FLAG_KEY) != 0;
 }
 
-bool isCorrupted(const std::shared_ptr<AVPacket> &pkt) {
+static bool isCorrupted(const std::shared_ptr<AVPacket> &pkt) {
   return (bool) ((uint32_t) pkt->flags & (uint32_t) AV_PKT_FLAG_CORRUPT);
+}
+
+static std::string createErrorBuf(int err_num) {
+  const int msg_len = 512;
+  std::string err_msg;
+  err_msg.reserve(msg_len);
+  av_make_error_string(err_msg.data(), msg_len, err_num);
+  return err_msg;
 }
 
 static void frameDeleter(AVFrame *frame) {
@@ -51,6 +60,17 @@ static void frameDeleter(AVFrame *frame) {
     av_frame_free(&frame);
     frame = nullptr;
   }
+}
+
+static int64_t ptsToTimeStamp(int64_t packet_pts, const AVStream *video_stream) {
+  if (!video_stream) {
+    return 0;
+  }
+
+  if (video_stream->start_time != AV_NOPTS_VALUE) {
+    return (packet_pts - video_stream->start_time) * 1000 * video_stream->time_base.num / video_stream->time_base.den;
+  }
+  return packet_pts * 1000 * video_stream->time_base.num / video_stream->time_base.den;
 }
 
 void Player::ReadPackets() {
@@ -72,9 +92,7 @@ void Player::ReadPackets() {
     int ret = av_read_frame(fmt_ctx_, packet_raw);
     fmt_ctx_->interrupt_callback.callback = nullptr;
     if (ret != 0) {
-      const int msg_len = 512;
-      char err_msg[msg_len] = {0};
-      av_make_error_string(err_msg, msg_len, ret);
+      std::string err_msg = createErrorBuf(ret);
       LOG(ERROR) << "read paket error: " << err_msg;
       if (ret == AVERROR_EOF || avio_feof(fmt_ctx_->pb)) {
         LOG(ERROR) << "media meet EOF";
@@ -124,18 +142,14 @@ void Player::DecodePackets() {
 
     int ret = avcodec_send_packet(codec_ctx_, packet.get());
     if (ret != 0) {
-      const int msg_len = 512;
-      char err_msg[msg_len] = {0};
-      av_make_error_string(err_msg, msg_len, ret);
+      std::string err_msg = createErrorBuf(ret);
       LOG(ERROR) << "avcodec_send_packet error: " << err_msg;
       break;
     }
 
     ret = avcodec_receive_frame(codec_ctx_, frame.get());
     if (ret != 0) {
-      const int msg_len = 512;
-      char err_msg[msg_len] = {0};
-      av_make_error_string(err_msg, msg_len, ret);
+      std::string err_msg = createErrorBuf(ret);
       LOG(ERROR) << "avcodec_receive_frame error: " << err_msg;
       if (ret != -EAGAIN) {
         break;
@@ -168,11 +182,17 @@ void Player::DecodePackets() {
                width * 3);
 
     cv::cuda::resize(image_gpu, image_gpu, cv::Size(960, 640));
-    Frame f(isKey(packet), frame->pts, frame->pkt_dts, index, frame->height, frame->width, image_gpu);
+    Frame f(image_gpu,
+            width,
+            height,
+            isKey(packet),
+            packet->pts,
+            packet->dts,
+            ptsToTimeStamp(packet->pts, this->fmt_ctx_->streams[video_stream_index_]), index);
 
     auto end = std::chrono::steady_clock::now();
     LOG(INFO) << f.to_string() << " decode costs:"
-              << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()<<" ms";
+              << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms";
     this->decoded_images_.push(f);
     index += 1;
 //    TOCK(DECODE)
@@ -226,7 +246,7 @@ bool Player::Open() {
 
   fmt_ctx_ = avformat_alloc_context();
   if (fmt_ctx_ == nullptr) {
-    LOG(FATAL) << "avformat_alloc_context failed";
+    LOG(ERROR) << "avformat_alloc_context failed";
     return false;
   }
   av_dict_set(&fmt_opts_, "rtsp_transport", "tcp", 0);
@@ -239,26 +259,22 @@ bool Player::Open() {
   AVInputFormat *ifmt = nullptr;
   int ret = avformat_open_input(&fmt_ctx_, input_rtsp_.c_str(), ifmt, &fmt_opts_);
   if (ret != 0) {
-    LOG(FATAL) << fmt::format("open input file[{}] failed: {}", input_rtsp_.c_str(), ret);
+    LOG(ERROR) << fmt::format("open input file[{}] failed: {}", input_rtsp_.c_str(), ret);
     return false;
   }
   fmt_ctx_->interrupt_callback.callback = nullptr;
 
   ret = avformat_find_stream_info(fmt_ctx_, nullptr);
   if (ret != 0) {
-    LOG(FATAL) << fmt::format("can not find stream: {}", ret);
+    LOG(ERROR) << fmt::format("can not find stream: {}", ret);
     return false;
   }
   LOG(INFO) << fmt::format("stream_num={}", fmt_ctx_->nb_streams);
 
   video_stream_index_ = av_find_best_stream(fmt_ctx_, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-  audio_stream_index_ = av_find_best_stream(fmt_ctx_, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
-  subtitle_stream_index_ = av_find_best_stream(fmt_ctx_, AVMEDIA_TYPE_SUBTITLE, -1, -1, nullptr, 0);
   LOG(INFO) << fmt::format("video_stream_index={:d}", video_stream_index_);
-  LOG(INFO) << fmt::format("audio_stream_index={:d}", audio_stream_index_);
-  LOG(INFO) << fmt::format("subtitle_stream_index={:d}", subtitle_stream_index_);
   if (video_stream_index_ < 0) {
-    LOG(FATAL) << ("Can not find video stream");
+    LOG(ERROR) << ("Can not find video stream");
     return false;
   }
 
@@ -270,19 +286,16 @@ bool Player::Open() {
   AVCodecParameters *codec_param = video_stream->codecpar;
   LOG(INFO) << fmt::format("codec_id={}:{}", codec_param->codec_id, avcodec_get_name(codec_param->codec_id));
 
-  const AVCodec *codec = nullptr;
-
-  codec = avcodec_find_decoder(codec_param->codec_id);
+  const AVCodec *codec = avcodec_find_decoder(codec_param->codec_id);
   if (codec == nullptr) {
-    LOG(FATAL) << "can not find decoder " << avcodec_get_name(codec_param->codec_id);
+    LOG(ERROR) << "can not find decoder " << avcodec_get_name(codec_param->codec_id);
     return false;
   }
 
   LOG(INFO) << fmt::format("codec_name: {}=>{}", codec->name, codec->long_name);
-
   codec_ctx_ = avcodec_alloc_context3(codec);
   if (codec_ctx_ == nullptr) {
-    LOG(FATAL) << "avcodec_alloc_context3";
+    LOG(ERROR) << "avcodec_alloc_context3";
     return false;
   }
 
@@ -293,7 +306,7 @@ bool Player::Open() {
         char error_buf[512] = {0};
         snprintf(error_buf, 512, "decoder %s does not support device type %s",
                  codec->name, av_hwdevice_get_type_name(hw_type));
-        LOG(FATAL) << error_buf;
+        LOG(ERROR) << error_buf;
         return false;
       }
       if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
@@ -306,14 +319,16 @@ bool Player::Open() {
 
   ret = avcodec_parameters_to_context(codec_ctx_, codec_param);
   if (ret != 0) {
-    LOG(FATAL) << fmt::format("avcodec_parameters_to_context error: {}", ret);
+    LOG(ERROR) << fmt::format("avcodec_parameters_to_context error: {}", ret);
     return false;
   }
 
   if (has_cuda) {
     codec_ctx_->get_format = GetHwFormat;
-    if (HwDecoderInit(codec_ctx_, hw_type) < 0)
-      LOG(FATAL) << "HW decoder init error";
+    if (HwDecoderInit(codec_ctx_, hw_type) < 0) {
+      LOG(ERROR) << "HW decoder init error";
+      return false;
+    }
   }
 
   if (codec_ctx_->codec_type == AVMEDIA_TYPE_VIDEO || codec_ctx_->codec_type == AVMEDIA_TYPE_AUDIO) {
@@ -321,44 +336,20 @@ bool Player::Open() {
   }
   ret = avcodec_open2(codec_ctx_, codec, &codec_opts_);
   if (ret != 0) {
-    LOG(FATAL) << fmt::format("can not open software codec error: {}", ret);
+    LOG(ERROR) << fmt::format("can not open software codec error: {}", ret);
     return false;
   }
 
   video_stream->discard = AVDISCARD_DEFAULT;
 
-  if (video_stream->avg_frame_rate.num && video_stream->avg_frame_rate.den) {
-    fps_ = video_stream->avg_frame_rate.num / video_stream->avg_frame_rate.den;
-  }
-  duration_ = 0;
-  start_time_ = 0;
-  if (video_time_base_num_ && video_time_base_den_) {
-    if (video_stream->duration > 0) {
-      duration_ = video_stream->duration / (double) video_time_base_den_ * video_time_base_num_ * 1000;
-    }
-    if (video_stream->start_time > 0) {
-      start_time_ = video_stream->start_time / (double) video_time_base_den_ * video_time_base_num_ * 1000;
-    }
-  }
-  LOG(INFO) << fmt::format("fps={} duration={} start_time={}", fps_, duration_, start_time_);
-
-  int sw = codec_ctx_->width;
-  int sh = codec_ctx_->height;
+  dw_ = codec_ctx_->width;
+  dh_ = codec_ctx_->height;
   src_pixel_fmt = codec_ctx_->pix_fmt;
-  if (sw <= 0 || sh <= 0 || src_pixel_fmt == AV_PIX_FMT_NONE) {
-    LOG(FATAL) << "get pixel format error";
+  if (dw_ <= 0 || dh_ <= 0 || src_pixel_fmt == AV_PIX_FMT_NONE) {
+    LOG(ERROR) << "get pixel format error";
     return false;
   }
-  dw_ = sw >> 2 << 2;
-  dh_ = sh;
-  dst_pixel_fmt = AV_PIX_FMT_BGR24;
-  sws_context_ = sws_getContext(sw, sh, src_pixel_fmt, dw_, dh_, dst_pixel_fmt, SWS_BICUBIC,
-                                nullptr, nullptr, nullptr);
-  if (!sws_context_) {
-    LOG(FATAL) << "sws get context failed";
-    return false;
-  }
-  linesize_[0] = dw_ * 3;
+
   return true;
 }
 
@@ -402,11 +393,6 @@ Player::~Player() {
     fmt_ctx_ = nullptr;
   }
 
-  if (sws_context_) {
-    sws_freeContext(sws_context_);
-    sws_context_ = nullptr;
-  }
-
   if (hw_device_ctx_ != nullptr) {
     av_buffer_unref(&hw_device_ctx_);
     hw_device_ctx_ = nullptr;
@@ -431,8 +417,8 @@ std::optional<Frame> Player::get_image() {
 static int interruptCallback(void *opaque) {
   if (opaque == nullptr) return 0;
   Player *player = (Player *) opaque;
-  if (time(nullptr) - player->block_starttime_ > player->block_timeout_) {
-    std::string s = fmt::format("interrupt quit, media address={}", player->get_rtsp());
+  if (player->is_runnable() && time(nullptr) - player->block_starttime_ > player->block_timeout_) {
+    std::string s = fmt::format("timeout interrupt quit, media address={}", player->get_rtsp());
     LOG(ERROR) << s;
     return 1;
   }

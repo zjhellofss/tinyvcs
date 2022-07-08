@@ -13,7 +13,7 @@
 
 struct Frame {
   Frame() = default;
-  Frame(bool is_key, uint64_t pts, uint64_t dts, uint64_t index, int height, int width, const cv::cuda::GpuMat &image);
+  Frame(const cv::cuda::GpuMat& image,int width, int height, bool is_key, uint64_t pts, uint64_t dts, uint64_t timestamp, uint64_t index);
   void set_preprocess_image(const cv::cuda::GpuMat &image);
   void set_detections(const std::vector<Detection> &detections);
   std::string to_string();
@@ -23,6 +23,7 @@ struct Frame {
   bool is_key_ = false;
   uint64_t pts_ = 0;
   uint64_t dts_ = 0;
+  uint64_t timestamp_ = 0;
   uint64_t index_ = 0;
 
   cv::cuda::GpuMat image_;
