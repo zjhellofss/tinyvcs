@@ -40,7 +40,7 @@ bool VideoStream::Open() {
     std::shared_ptr<Connection> connection = std::make_shared<Connection>();
     bool is_open = connection->Connect(subscription);
     if (!is_open) {
-      LOG(FATAL) << "can not connect to " << subscription;
+      LOG(ERROR) << "can not connect to " << subscription;
       return false;
     } else {
       connnections_.push_back(connection);
@@ -54,7 +54,7 @@ bool VideoStream::Open() {
 }
 
 void VideoStream::ProcessResults() {
-//  cv::namedWindow("test");
+  cv::namedWindow("test");
   while (true) {
     Frame f;
     for (;;) {
@@ -71,14 +71,13 @@ void VideoStream::ProcessResults() {
       break;
     }
     auto detections = f.detections_;
-    cv::cuda::GpuMat image_gpu = f.image_;
-    cv::Mat image;
-//    image_gpu.download(image);
-//    for (const auto &detection : detections) {
-//      cv::rectangle(image, detection.box, cv::Scalar(255, 0, 0), 8);
-//    }
-//    cv::imshow("test",image);
-//    cv::waitKey(20);
+    cv::cuda::GpuMat image_gpu = f.gpu_image_;
+    f.set_cpu_image();
+    for (const auto &detection : detections) {
+      cv::rectangle(f.cpu_image_, detection.box, cv::Scalar(255, 0, 0), 8);
+    }
+    cv::imshow("test", f.cpu_image_);
+    cv::waitKey(20);
   }
 }
 
@@ -130,7 +129,7 @@ void VideoStream::ReadImages() {
     if (frame_opt.has_value()) {
       Frame f = frame_opt.value();
       cv::cuda::GpuMat preprocess_image;
-      auto image = f.image_;
+      auto image = f.gpu_image_;
 
       if (f.index_ % duration_) {
         continue;

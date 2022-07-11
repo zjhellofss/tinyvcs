@@ -59,6 +59,8 @@ class Trt : private boost::noncopyable {
 
   void CopyFromDeviceToHost(std::vector<float> &output, int bind_index);
 
+  void CopyFromDeviceToDevice2(float *outputs, int elements_size, int bind_index) const;
+
   nvinfer1::Dims binding_dims(int bind_index) const; /// get binding dimensions
 
   int input_bindings() const; ///get number of input bindings

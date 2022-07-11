@@ -55,7 +55,7 @@ class Inference : private boost::noncopyable {
   std::string engine_file_;
   bool enable_fp16_ = false;
   int device_ = 0;
-  size_t batch_ = 0;
+  int batch_ = 0;
   int num_classes_ = 0;
   int elements_in_one_batch_ = 0;
   int elements_in_all_batch_ = 0;

@@ -125,6 +125,12 @@ void Trt::CopyFromDeviceToHost(std::vector<float> &output, int bind_index) {
                              output.size() * sizeof(float), cudaMemcpyDeviceToHost, stream_))
 }
 
+void Trt::CopyFromDeviceToDevice2(float *outputs, int elements_size, int bind_index) const {
+  CHECK(outputs != nullptr);
+  CUDA_CHECK(cudaMemcpyAsync(outputs, binding_[bind_index],
+                             elements_size * sizeof(float), cudaMemcpyDeviceToDevice, stream_))
+}
+
 nvinfer1::Dims Trt::binding_dims(int bind_index) const {
   return binding_dims_[bind_index];
 }

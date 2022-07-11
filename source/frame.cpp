@@ -2,7 +2,7 @@
 // Created by fss on 22-6-6.
 //
 #include "frame.h"
-#include <utility>
+#include "glog/logging.h"
 
 void Frame::set_preprocess_image(const cv::cuda::GpuMat &image) {
   this->preprocess_image_ = image;
@@ -32,7 +32,7 @@ Frame::Frame(const cv::cuda::GpuMat &image,
              uint64_t dts,
              uint64_t timestamp,
              uint64_t index)
-    : image_(image),
+    : gpu_image_(image),
       width_(width),
       height_(height),
       is_key_(is_key),
@@ -41,7 +41,11 @@ Frame::Frame(const cv::cuda::GpuMat &image,
       timestamp_(timestamp),
       index_(index) {
 
+}
 
-
+void Frame::set_cpu_image() {
+  if (!this->cpu_image_.empty() || this->gpu_image_.empty())
+    return;
+  this->gpu_image_.download(this->cpu_image_);
 }
 
