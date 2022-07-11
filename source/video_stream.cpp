@@ -54,7 +54,7 @@ bool VideoStream::Open() {
 }
 
 void VideoStream::ProcessResults() {
-  cv::namedWindow("test");
+//  cv::namedWindow("test");
   while (true) {
     Frame f;
     for (;;) {
@@ -72,12 +72,12 @@ void VideoStream::ProcessResults() {
     }
     auto detections = f.detections_;
     cv::cuda::GpuMat image_gpu = f.gpu_image_;
-    f.set_cpu_image();
-    for (const auto &detection : detections) {
-      cv::rectangle(f.cpu_image_, detection.box, cv::Scalar(255, 0, 0), 8);
-    }
-    cv::imshow("test", f.cpu_image_);
-    cv::waitKey(20);
+//    f.set_cpu_image();
+//    for (const auto &detection : detections) {
+//      cv::rectangle(f.cpu_image_, detection.box, cv::Scalar(255, 0, 0), 8);
+//    }
+//    cv::imshow("test", f.cpu_image_);
+//    cv::waitKey(20);
   }
 }
 

@@ -97,21 +97,20 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::cuda:
     });
 
     auto inputs = output_raw + elements_in_one_batch_ * i;
-    int detection_number =
-        postProcessing(inputs, conf_thresh, num_classes_, max_det_count, detections_raw_, max_det_count);
+    std::vector<Detection_> results =
+        postProcessing(inputs, conf_thresh, num_classes_, max_det_count, detections_raw_);
 
     std::vector<cv::Rect> boxes;
-    std::vector<float> confs;
+    std::vector<float> confidences;
     std::vector<int> class_ids;
-    for (int d = 0; d < detection_number; ++d) {
-      Detection_ detection_ = detections_raw_[d];
-      confs.push_back(detection_.obj_conf_);
+    for (auto detection_ : results) {
+      confidences.push_back(detection_.obj_conf_);
       class_ids.push_back(detection_.class_id_);
       boxes.emplace_back(detection_.left_, detection_.top_, detection_.box_width_, detection_.box_height_);
     }
 
     std::vector<int> indices;
-    cv::dnn::NMSBoxes(boxes, confs, conf_thresh, iou_thresh, indices);
+    cv::dnn::NMSBoxes(boxes, confidences, conf_thresh, iou_thresh, indices);
     cv::Size resized_shape = cv::Size((int) input_dims_.d[2], (int) input_dims_.d[3]);
     std::vector<Detection> detections_batch;
 
@@ -120,7 +119,7 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::cuda:
       det.box = cv::Rect(boxes[idx]);
       scaleCoords(resized_shape, det.box, cv::Size{960, 640});
 
-      det.conf = confs[idx];
+      det.conf = confidences[idx];
       det.class_id = class_ids[idx];
       detections_batch.emplace_back(det);
     }
