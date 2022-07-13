@@ -9,7 +9,7 @@
 #include <thread>
 #include "boost/core/noncopyable.hpp"
 
-#include "websocket/client.h"
+#include "zeromq/client.h"
 #include "tensorrt/engine.h"
 #include "sync_queue.h"
 #include "player.h"
@@ -22,13 +22,13 @@ class VideoStream : private boost::noncopyable {
                        int height,
                        int width,
                        std::string rtsp_address,
-                       std::vector<std::string> subscriptions)
+                       std::string subscription)
       : stream_id_(stream_id),
         duration_(duration),
         infer_width_(width),
         infer_height_(height),
         rtsp_address_(std::move(rtsp_address)),
-        subscriptions_(std::move(subscriptions)) {
+        subscription_(std::move(subscription)) {
 
   }
   ~VideoStream() {
@@ -49,7 +49,11 @@ class VideoStream : private boost::noncopyable {
 
   void set_inference(size_t batch, const std::string &engine_file);
 
+  void exit_loop();
+
   void Run();
+
+  void PlayerMonitor();
 
  private:
   int stream_id_ = 0;
@@ -57,12 +61,13 @@ class VideoStream : private boost::noncopyable {
   int duration_ = 0;
   int infer_width_ = 0;
   int infer_height_ = 0;
+  bool is_runnable_ = false;
   std::string rtsp_address_;
-  std::vector<std::string> subscriptions_;
+  std::string subscription_;
   std::vector<std::thread> threads_;
-  std::vector<std::shared_ptr<Connection>> connnections_;
   SynchronizedQueue<Frame, 1024> frames_;
   SynchronizedQueue<Frame, 1024> show_frames_;
+  std::shared_ptr<ClientChannel> channel_;
   std::shared_ptr<Player> player_;
   std::unique_ptr<Inference> inference_;
 };

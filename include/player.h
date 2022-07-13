@@ -37,6 +37,11 @@ class Player : private boost::noncopyable {
   bool is_runnable() const {
     return this->is_runnable_;
   }
+
+  void exit_loop() {
+    this->is_runnable_ = false;
+  }
+
  private:
   void ReadPackets(); ///
 

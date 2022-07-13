@@ -24,6 +24,7 @@ std::string Frame::to_string() {
                             this->timestamp_);
   return message;
 }
+
 Frame::Frame(const cv::cuda::GpuMat &image,
              int width,
              int height,
@@ -47,5 +48,16 @@ void Frame::set_cpu_image() {
   if (!this->cpu_image_.empty() || this->gpu_image_.empty())
     return;
   this->gpu_image_.download(this->cpu_image_);
+  CHECK(!this->cpu_image_.empty());
+  auto size = this->cpu_image_.size();
+  this->height_ = size.height;
+  this->width_ = size.width;
+  this->cpu_image_raw_ =
+      std::vector<uchar>(cpu_image_.data,
+                         cpu_image_.data + (cpu_image_.rows * cpu_image_.cols * cpu_image_.channels()));
+}
+
+void Frame::set_stream_id(int stream_id) {
+  this->stream_id_ = stream_id;
 }
 

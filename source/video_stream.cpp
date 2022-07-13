@@ -5,7 +5,6 @@
 #include <string>
 
 #include "fmt/core.h"
-#include "websocket/client.h"
 #include "boost/range/combine.hpp"
 #include "glog/logging.h"
 
@@ -30,25 +29,31 @@ void VideoStream::Run() {
     });
     threads_.push_back(std::move(t3));
   }
+//  std::thread t4([this]() {
+//    if (!this->player_->is_runnable()) {
+//      this->is_runnable_ = false;
+//    }
+//  });
+//  threads_.push_back(std::move(t4));
 }
 
 bool VideoStream::Open() {
   player_ = std::make_shared<Player>(stream_id_, rtsp_address_);
   bool open_success = player_->Open();
-  // open websockets
-  for (const std::string &subscription : subscriptions_) {
-    std::shared_ptr<Connection> connection = std::make_shared<Connection>();
-    bool is_open = connection->Connect(subscription);
-    if (!is_open) {
-      LOG(ERROR) << "can not connect to " << subscription;
-      return false;
-    } else {
-      connnections_.push_back(connection);
-    }
-  }
   if (!open_success) {
+    LOG(ERROR) << "player open failed";
     return false;
   }
+  // open zeromq
+  if (!channel_) {
+    this->channel_ = std::make_shared<ClientChannel>(this->subscription_);
+    open_success = this->channel_->Init();
+    if (!open_success) {
+      LOG(ERROR) << "zeromq open failed";
+      return false;
+    }
+  }
+  is_runnable_ = true;
   player_->Run();
   return true;
 }
@@ -71,13 +76,11 @@ void VideoStream::ProcessResults() {
       break;
     }
     auto detections = f.detections_;
-    cv::cuda::GpuMat image_gpu = f.gpu_image_;
-//    f.set_cpu_image();
-//    for (const auto &detection : detections) {
-//      cv::rectangle(f.cpu_image_, detection.box, cv::Scalar(255, 0, 0), 8);
-//    }
-//    cv::imshow("test", f.cpu_image_);
-//    cv::waitKey(20);
+    f.set_cpu_image();
+    f.set_stream_id(this->stream_id_);
+    if (this->channel_) {
+      this->channel_->PublishFrame(f);
+    }
   }
 }
 
@@ -151,6 +154,19 @@ void VideoStream::set_inference(size_t batch, const std::string &engine_file) {
   batch_ = batch;
   this->inference_ = std::make_unique<Inference>("", engine_file, 0, true);
   this->inference_->Init();
+}
+
+void VideoStream::exit_loop() {
+  if (this->player_) {
+    this->player_->exit_loop();
+  }
+  this->is_runnable_ = false;
+}
+
+void VideoStream::PlayerMonitor() {
+  while (true) {
+
+  }
 }
 
 

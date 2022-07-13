@@ -52,7 +52,7 @@ link_directories(${OpenCV_LIBRARY_DIRS})
 include_directories(/usr/local/include/libyuv)
 ###############
 
-####websocket\boost#####
+####zeromq\boost#####
 set(BOOST_INCLUDE_DIR /usr/local/include/boost/)
 set(BOOST_INCLUDE_SUB_DIR /usr/local/include/)
 include_directories(${BOOST_INCLUDE_DIR} ${BOOST_INCLUDE_SUB_DIR})
@@ -75,6 +75,11 @@ find_package(ZLIB REQUIRED)
 include_directories(/usr/local/cuda-10.2/include)
 link_directories(/usr/local/cuda-10.2/lib64)
 
+
+#### msgpack+zeromq####
+find_package(msgpack REQUIRED)
+find_package(cppzmq REQUIRED)
+
 ###openmp####
 find_package(OpenMP)
 if (OPENMP_FOUND)
@@ -83,14 +88,14 @@ if (OPENMP_FOUND)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif ()
 
-aux_source_directory(source/websocket DIR_WEBSOCKET_SRCS)
+aux_source_directory(source/zeromq DIR_MQ_SRCS)
 aux_source_directory(source/json DIR_JSON_SRCS)
 aux_source_directory(source/cuda DIR_CUDA_SRCS)
 aux_source_directory(source/tensorrt DIR_TENSOR_SRCS)
 aux_source_directory(source DIR_SRCS)
 
-set(ALL_SRCS ${DIR_SRCS} ${DIR_WEBSOCKET_SRCS} ${DIR_JSON_SRCS} ${DIR_CUDA_SRCS} ${DIR_TENSOR_SRCS} ${SAMPLE_SRCS} samples/video_test.cpp include/cuda/post_processing.cuh source/cuda/post_processing.cu)
+set(ALL_SRCS ${DIR_SRCS} ${DIR_MQ_SRCS} ${DIR_JSON_SRCS} ${DIR_CUDA_SRCS} ${DIR_TENSOR_SRCS} ${SAMPLE_SRCS} samples/video_test.cpp include/cuda/post_processing.cuh source/cuda/post_processing.cu)
 add_executable(tinyvcs ${ALL_SRCS})
 target_include_directories(tinyvcs PRIVATE ${SWSCALE_INCLUDE_DIR} ${AVCODEC_INCLUDE_DIR} ${AVFORMAT_INCLUDE_DIR} ${AVUTIL_INCLUDE_DIR} ${AVDEVICE_INCLUDE_DIR})
-target_link_libraries(tinyvcs PRIVATE nvinfer cudart gflags)
+target_link_libraries(tinyvcs PRIVATE nvinfer cudart gflags cppzmq msgpackc-cxx)
 target_link_libraries(tinyvcs PRIVATE benchmark::benchmark benchmark::benchmark_main ${LIBNVONNXPARSER} cudart ${ZLIB_LIBRARIES} ${LIBNVPARSERS} yuv jpeg boost_chrono boost_system boost_random boost_program_options boost_filesystem swscale ${SWSCALE_LIBRARY} ${OpenCV_LIBS} ${AVSWS_LIBRARY} ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${AVDEVICE_LIBRARY} pthread glog fmt)

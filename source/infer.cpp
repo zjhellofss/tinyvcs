@@ -85,17 +85,16 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::cuda:
 
   size_t detections_sizes = 0;
   int max_det_count = (elements_in_one_batch_) / (num_classes_ + 5);
+  Detection_ *detections_raw_ = nullptr;
+  cudaMallocManaged((void **) &detections_raw_, sizeof(Detection_) * max_det_count);
+
+  std::shared_ptr<Detection_>
+      detections_ = std::shared_ptr<Detection_>(detections_raw_, [](Detection_ *detections_raw_) {
+    if (detections_raw_) {
+      cudaFree(detections_raw_);
+    }
+  });
   for (int i = 0; i < batch_; ++i) {
-    Detection_ *detections_raw_ = nullptr;
-    cudaMallocManaged((void **) &detections_raw_, sizeof(Detection_) * max_det_count);
-
-    std::shared_ptr<Detection_>
-        detections_ = std::shared_ptr<Detection_>(detections_raw_, [](Detection_ *detections_raw_) {
-      if (detections_raw_) {
-        cudaFree(detections_raw_);
-      }
-    });
-
     auto inputs = output_raw + elements_in_one_batch_ * i;
     std::vector<Detection_> results =
         postProcessing(inputs, conf_thresh, num_classes_, max_det_count, detections_raw_);

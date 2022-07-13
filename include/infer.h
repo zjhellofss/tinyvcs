@@ -10,8 +10,9 @@
 #include "NvInfer.h"
 #include "boost/core/noncopyable.hpp"
 #include "NvInferVersion.h"
-
 #include "nlohmann/json.hpp"
+#include "msgpack.hpp"
+
 #include "tensorrt/engine.h"
 
 using json = nlohmann::json;
@@ -20,16 +21,7 @@ struct Detection {
   cv::Rect box;
   int class_id = 0;
   float conf = 0.f;
-
-  void to_json(json &j) const {
-    j = json{{"x", this->box.x},
-             {"y", this->box.y},
-             {"height", this->box.height},
-             {"width", this->box.width},
-             {"class_id", this->class_id},
-             {"conf", this->conf}
-    };
-  }
+  MSGPACK_DEFINE (box.width, box.height, box.x, box.y, class_id, conf);
 };
 
 class Inference : private boost::noncopyable {

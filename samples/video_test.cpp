@@ -30,6 +30,7 @@ DEFINE_validator(rtsp, &validateRtsp);
 
 DEFINE_string(engine, "", "model engine for inference");
 DEFINE_string(log, "./log", "log file dir");
+DEFINE_string(sub, "tcp://127.0.0.1:10080", "zeromq address");
 DEFINE_bool(stderr, true, "log to stderr");
 DEFINE_int32(loglevel, 1, "min log level");
 DEFINE_int32(id, 0, "stream id");
@@ -53,13 +54,12 @@ int main(int argc, char *argv[]) {
       LOG(INFO) << "create log dir: " << FLAGS_log;
   }
 
-  std::vector<std::string> subscriptions;
   VideoStream stream(FLAGS_id,
                      FLAGS_duration,
                      FLAGS_height,
                      FLAGS_width,
                      FLAGS_rtsp,
-                     subscriptions);
+                     FLAGS_sub);
   if (!FLAGS_engine.empty()) {
     stream.set_inference(FLAGS_batch_size, FLAGS_engine);
   }
