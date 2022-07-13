@@ -31,6 +31,8 @@ class Player : private boost::noncopyable {
 
   size_t number_decode_remain();
 
+  int fps();
+
   std::optional<Frame> get_image();
 
  public:
@@ -46,6 +48,8 @@ class Player : private boost::noncopyable {
     this->is_runnable_ = false;
   }
 
+  float mean_decode_costs();
+
  private:
   void ReadPackets(); ///
 
@@ -56,6 +60,7 @@ class Player : private boost::noncopyable {
   static AVPixelFormat GetHwFormat(AVCodecContext *ctx, const enum AVPixelFormat *pix_fmts);
 
  private:
+  boost::circular_buffer<long> decode_costs_{512};
   std::vector<std::thread> threads_;
   const std::string input_rtsp_;
   AVPixelFormat src_pixel_fmt{};

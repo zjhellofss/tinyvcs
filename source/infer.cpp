@@ -126,9 +126,20 @@ std::vector<std::vector<Detection>> Inference::Infer(const std::vector<cv::cuda:
     detections.push_back(detections_batch);
   }
   auto end = std::chrono::steady_clock::now();
-  LOG(INFO) << "infer cost: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() / batch_
-            << " ms"
-            << " infer number: " << detections_sizes;
+  long infer_cost = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() / batch_;
+  this->infer_costs_.push_back(infer_cost);
+//  LOG(INFO) << "infer cost: " <<
+//            << " ms"
+//            << " infer number: " << detections_sizes;
 
   return detections;
+}
+
+float Inference::infer_costs() {
+  if (this->infer_costs_.empty()) {
+    return 0.f;
+  }
+  long sum = std::accumulate(this->infer_costs_.begin(), this->infer_costs_.end(), 0l);
+  float mean = (float) sum / (float) this->infer_costs_.size();
+  return mean;
 }

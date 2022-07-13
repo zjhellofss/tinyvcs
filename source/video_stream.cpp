@@ -20,12 +20,21 @@ void sync_monitor_handle(const boost::system::error_code &error_code,
   size_t decode_image_remain = player->number_decode_remain();
   size_t infer_image_remain = stream->frames_.read_available();
   size_t show_image_remain = stream->show_frames_.read_available();
-  std::string info = fmt::format("packet remain:{} decoded remain:{} infer remain:{} process remain:{}",
-                                 packet_remain,
-                                 decode_image_remain,
-                                 infer_image_remain,
-                                 show_image_remain);
+  float mean_time_decode = player->mean_decode_costs();
+  float mean_time_infer = stream->inference_->infer_costs();
+  int fps = player->fps();
+  std::string info =
+      fmt::format(
+          "fps:{} mean_decode_time:{} ms mean_infer_time:{}",
+          fps,
+          mean_time_decode, mean_time_infer);
+  std::string remain_info = fmt::format("packet remain:{} decoded remain:{} infer remain:{} process remain:{}",
+                                        packet_remain,
+                                        decode_image_remain,
+                                        infer_image_remain,
+                                        show_image_remain);
   LOG(INFO) << info;
+  LOG(INFO) << remain_info;
   if (player->is_runnable()) {
     timer->expires_at(timer->expires_at() + boost::posix_time::seconds(1));
     timer->async_wait(boost::bind(sync_monitor_handle, boost::asio::placeholders::error, timer, stream));

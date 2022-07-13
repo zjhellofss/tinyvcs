@@ -7,34 +7,24 @@
 #include <memory>
 #include <thread>
 
-#include "opencv2/opencv.hpp"
 #include "opencv2/cudawarping.hpp"
 #include "cuda/hw_decode.h"
 #include "glog/logging.h"
 #include "fmt/core.h"
-#include "tick.h"
 
 #include "ffmpeg.h"
 #include "frame.h"
-#include "image_utils.h"
 #include "convert.h"
 
 AVPixelFormat  Player::hwformat_ = AVPixelFormat::AV_PIX_FMT_NONE;
 
-static boost::circular_buffer<std::shared_ptr<AVPacket>> packets_pool_;
-
 static int interruptCallback(void *opaque);
 
 static void packetDeleter(AVPacket *packet) {
-
   if (packet != nullptr) {
-    if (!packets_pool_.full()) {
-      packets_pool_.push_back(std::shared_ptr<AVPacket>(packet, packetDeleter));
-    } else {
-      av_packet_unref(packet);
-      av_packet_free(&packet);
-      packet = nullptr;
-    }
+    av_packet_unref(packet);
+    av_packet_free(&packet);
+    packet = nullptr;
   }
 }
 
@@ -82,12 +72,8 @@ void Player::ReadPackets() {
     fmt_ctx_->interrupt_callback.opaque = this;
     block_starttime_ = time(nullptr);
     std::shared_ptr<AVPacket> packet;
-    if (!packets_pool_.empty()) {
-      packet = packets_pool_.front();
-      packets_pool_.pop_front();
-    } else {
-      packet = std::shared_ptr<AVPacket>(av_packet_alloc(), packetDeleter);
-    }
+    packet = std::shared_ptr<AVPacket>(av_packet_alloc(), packetDeleter);
+
     auto packet_raw = packet.get();
     int ret = av_read_frame(fmt_ctx_, packet_raw);
     fmt_ctx_->interrupt_callback.callback = nullptr;
@@ -172,6 +158,7 @@ void Player::DecodePackets() {
       LOG(ERROR) << "convert frame failed";
       continue;
     }
+
     cv::cuda::GpuMat image_gpu_yuv = image_gpu_opt.value();
     cv::cuda::GpuMat image_gpu = cv::cuda::createContinuous(image_gpu_yuv.rows, image_gpu_yuv.cols, CV_8UC3);
     convertYUV(image_gpu_yuv.data,
@@ -191,8 +178,8 @@ void Player::DecodePackets() {
             ptsToTimeStamp(packet->pts, this->fmt_ctx_->streams[video_stream_index_]), index);
 
     auto end = std::chrono::steady_clock::now();
-    LOG(INFO) << f.to_string() << " decode costs:"
-              << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << " ms";
+    auto decode_cost = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    this->decode_costs_.push_back(decode_cost);
     this->decoded_images_.push(f);
     index += 1;
 //    TOCK(DECODE)
@@ -418,6 +405,24 @@ size_t Player::number_decode_remain() {
 
 size_t Player::number_packet_remain() {
   return this->frames_.read_available();
+}
+
+int Player::fps() {
+  AVStream *video_stream = this->fmt_ctx_->streams[video_stream_index_];
+  if (video_stream->avg_frame_rate.num && video_stream->avg_frame_rate.den) {
+    int fps = video_stream->avg_frame_rate.num / video_stream->avg_frame_rate.den;
+    return fps;
+  }
+  return -1;
+}
+
+float Player::mean_decode_costs() {
+  if (this->decode_costs_.empty()) {
+    return 0.f;
+  }
+  long sum = std::accumulate(this->decode_costs_.begin(), this->decode_costs_.end(), 0l);
+  float mean = (float) sum / (float) this->decode_costs_.size();
+  return mean;
 }
 
 static int interruptCallback(void *opaque) {

@@ -9,13 +9,13 @@
 #include "opencv2/opencv.hpp"
 #include "NvInfer.h"
 #include "boost/core/noncopyable.hpp"
+#include "boost/circular_buffer.hpp"
+
 #include "NvInferVersion.h"
 #include "nlohmann/json.hpp"
 #include "msgpack.hpp"
 
 #include "tensorrt/engine.h"
-
-using json = nlohmann::json;
 
 struct Detection {
   cv::Rect box;
@@ -41,10 +41,13 @@ class Inference : private boost::noncopyable {
                                             float conf_thresh,
                                             float iou_thresh);
 
+  float infer_costs();
+
  private:
   std::unique_ptr<Trt> onnx_net_;
   std::string onnx_file_;
   std::string engine_file_;
+  boost::circular_buffer<long> infer_costs_{512};
   bool enable_fp16_ = false;
   int device_ = 0;
   int batch_ = 0;
