@@ -8,7 +8,8 @@
 #include <vector>
 #include <thread>
 #include "boost/core/noncopyable.hpp"
-
+#include "boost/bind.hpp"
+#include "boost/asio.hpp"
 #include "zeromq/client.h"
 #include "tensorrt/engine.h"
 #include "sync_queue.h"
@@ -55,13 +56,16 @@ class VideoStream : private boost::noncopyable {
 
   void PlayerMonitor();
 
+  friend void sync_monitor_handle(const boost::system::error_code &error_code,
+                               boost::asio::deadline_timer *timer,
+                               VideoStream *stream);
+
  private:
   int stream_id_ = 0;
   size_t batch_ = 0;
   int duration_ = 0;
   int infer_width_ = 0;
   int infer_height_ = 0;
-  bool is_runnable_ = false;
   std::string rtsp_address_;
   std::string subscription_;
   std::vector<std::thread> threads_;

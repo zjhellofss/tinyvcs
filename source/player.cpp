@@ -412,6 +412,14 @@ std::optional<Frame> Player::get_image() {
   return std::nullopt;
 }
 
+size_t Player::number_decode_remain() {
+  return this->decoded_images_.read_available();
+}
+
+size_t Player::number_packet_remain() {
+  return this->frames_.read_available();
+}
+
 static int interruptCallback(void *opaque) {
   if (opaque == nullptr) return 0;
   Player *player = (Player *) opaque;

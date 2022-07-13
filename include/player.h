@@ -27,6 +27,10 @@ class Player : private boost::noncopyable {
 
   void Run();
 
+  size_t number_packet_remain();
+
+  size_t number_decode_remain();
+
   std::optional<Frame> get_image();
 
  public:

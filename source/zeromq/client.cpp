@@ -14,9 +14,10 @@ bool ClientChannel::Init() {
     return false;
   }
 
-  LOG(ERROR) << "zeromq connect failed!";
-  if (!sock_.handle())
+  if (!sock_.handle()) {
+    LOG(ERROR) << "zeromq connect failed!";
     return false;
+  }
 
   has_init_ = true;
   return true;

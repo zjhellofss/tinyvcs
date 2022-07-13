@@ -11,7 +11,7 @@
 
 #include <boost/core/noncopyable.hpp>
 
-template<typename T, int capacity, int wait_time_out = 1>
+template<typename T, size_t capacity, int wait_time_out = 1>
 class SynchronizedQueue : boost::noncopyable {
  public:
   bool push(const T &value) {
@@ -52,9 +52,14 @@ class SynchronizedQueue : boost::noncopyable {
     return this->capacity_ - this->elem_queue_.size();
   }
 
+  size_t read_available() {
+    std::unique_lock<std::mutex> lk(this->mutex_);
+    return this->elem_queue_.size();
+  }
+
  private:
   int wait_time_out_ = wait_time_out;// 100ms time out
-  int capacity_ = capacity;
+  size_t capacity_ = capacity;
   std::deque<T> elem_queue_;
   std::mutex mutex_;
   std::condition_variable cond_;

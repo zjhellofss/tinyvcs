@@ -12,6 +12,26 @@
 #include "player.h"
 #include "infer.h"
 
+void sync_monitor_handle(const boost::system::error_code &error_code,
+                         boost::asio::deadline_timer *timer,
+                         VideoStream *stream) {
+  std::shared_ptr<Player> player = stream->player_;
+  size_t packet_remain = player->number_packet_remain();
+  size_t decode_image_remain = player->number_decode_remain();
+  size_t infer_image_remain = stream->frames_.read_available();
+  size_t show_image_remain = stream->show_frames_.read_available();
+  std::string info = fmt::format("packet remain:{} decoded remain:{} infer remain:{} process remain:{}",
+                                 packet_remain,
+                                 decode_image_remain,
+                                 infer_image_remain,
+                                 show_image_remain);
+  LOG(INFO) << info;
+  if (player->is_runnable()) {
+    timer->expires_at(timer->expires_at() + boost::posix_time::seconds(1));
+    timer->async_wait(boost::bind(sync_monitor_handle, boost::asio::placeholders::error, timer, stream));
+  }
+}
+
 void VideoStream::Run() {
   std::thread t1([this]() {
     this->ReadImages();
@@ -29,12 +49,14 @@ void VideoStream::Run() {
     });
     threads_.push_back(std::move(t3));
   }
-//  std::thread t4([this]() {
-//    if (!this->player_->is_runnable()) {
-//      this->is_runnable_ = false;
-//    }
-//  });
-//  threads_.push_back(std::move(t4));
+
+  std::thread monitor([&] {
+    boost::asio::io_service io_service;
+    boost::asio::deadline_timer timer(io_service, boost::posix_time::seconds(1));
+    timer.async_wait(boost::bind(sync_monitor_handle, boost::asio::placeholders::error(), &timer, this));
+    io_service.run();
+  });
+  threads_.push_back(std::move(monitor));
 }
 
 bool VideoStream::Open() {
@@ -53,7 +75,6 @@ bool VideoStream::Open() {
       return false;
     }
   }
-  is_runnable_ = true;
   player_->Run();
   return true;
 }
@@ -160,7 +181,6 @@ void VideoStream::exit_loop() {
   if (this->player_) {
     this->player_->exit_loop();
   }
-  this->is_runnable_ = false;
 }
 
 void VideoStream::PlayerMonitor() {
