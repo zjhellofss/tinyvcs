@@ -1,7 +1,7 @@
 //
 // Created by fss on 22-6-7.
 //
-#include "convert.h"
+#include "cuda/convert_yuv.h"
 #include <device_launch_parameters.h>
 #include "cuda/preprocess.h"
 #include "cuda/cuda_utils.h"

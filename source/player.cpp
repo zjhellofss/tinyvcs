@@ -8,13 +8,16 @@
 #include <thread>
 
 #include "opencv2/cudawarping.hpp"
-#include "cuda/hw_decode.h"
+#include "cuda/convert_frame.h"
 #include "glog/logging.h"
 #include "fmt/core.h"
 
 #include "ffmpeg.h"
 #include "frame.h"
-#include "convert.h"
+#include "cuda/convert_yuv.h"
+#include "cuda/op/preprocess_op.h"
+#include "cuda/op/letterbox_op.h"
+#include "cuda/op/avframe_op.h"
 
 AVPixelFormat  Player::hwformat_ = AVPixelFormat::AV_PIX_FMT_NONE;
 
@@ -153,23 +156,22 @@ void Player::DecodePackets() {
       continue;
     }
 
-    std::optional<cv::cuda::GpuMat> image_gpu_opt = ConvertFrame(frame.get());
-    if (!image_gpu_opt.has_value()) {
+    FrameConvertOp frame_op(frame);
+    cv::cuda::GpuMat yuv_image;
+    frame_op.Process(yuv_image);
+    if (yuv_image.empty()) {
       LOG(ERROR) << "convert frame failed";
       continue;
     }
+    PreProcessOp pre_op(height, width, 640, 960);
+    cv::cuda::GpuMat image_gpu;
+    pre_op.Process(yuv_image, image_gpu);
 
-    cv::cuda::GpuMat image_gpu_yuv = image_gpu_opt.value();
-    cv::cuda::GpuMat image_gpu = cv::cuda::createContinuous(image_gpu_yuv.rows, image_gpu_yuv.cols, CV_8UC3);
-    convertYUV(image_gpu_yuv.data,
-               height,
-               width,
-               width,
-               image_gpu.data,
-               width * 3);
+    LetterBoxOp letter_box_op(640, 640);
+    cv::cuda::GpuMat preprocess_image;
+    letter_box_op.Process(image_gpu, preprocess_image);
 
-    cv::cuda::resize(image_gpu, image_gpu, cv::Size(960, 640));
-    Frame f(image_gpu,
+    Frame f(image_gpu, preprocess_image,
             width,
             height,
             isKey(packet),

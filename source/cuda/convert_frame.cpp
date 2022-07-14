@@ -1,7 +1,7 @@
 //
 // Created by fss on 22-7-1.
 //
-#include "cuda/hw_decode.h"
+#include "cuda/convert_frame.h"
 #include "opencv2/opencv.hpp"
 #include "cuda_runtime_api.h"
 #include "glog/logging.h"
@@ -9,9 +9,8 @@
 //ffmpeg
 #include "ffmpeg.h"
 
-static cudaStream_t stream = nullptr;
 
-std::optional<cv::cuda::GpuMat> ConvertFrame(AVFrame *cu_frame) {
+std::optional<cv::cuda::GpuMat> ConvertFrame(AVFrame *cu_frame, cudaStream_t stream) {
   cv::cuda::GpuMat gpu_mat;
   if (cu_frame == nullptr) {
     LOG(ERROR) << "Frame is null";
@@ -29,8 +28,7 @@ std::optional<cv::cuda::GpuMat> ConvertFrame(AVFrame *cu_frame) {
   }
 
   int copy_offset = 0;
-  if(!stream)
-    CUDA_CHECK(cudaStreamCreate(&stream))
+  if (!stream) CUDA_CHECK(cudaStreamCreate(&stream))
 
   for (size_t i = 0; i < FF_ARRAY_ELEMS(cu_frame->data) && cu_frame->data[i]; i++) {
     int src_pitch = cu_frame->linesize[i];

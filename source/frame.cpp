@@ -4,10 +4,6 @@
 #include "frame.h"
 #include "glog/logging.h"
 
-void Frame::set_preprocess_image(const cv::cuda::GpuMat &image) {
-  this->preprocess_image_ = image;
-}
-
 void Frame::set_detections(const std::vector<Detection> &detections) {
   this->detections_ = detections;
 }
@@ -26,6 +22,7 @@ std::string Frame::to_string() {
 }
 
 Frame::Frame(const cv::cuda::GpuMat &image,
+             const cv::cuda::GpuMat &preprocess_image,
              int width,
              int height,
              bool is_key,
@@ -34,6 +31,7 @@ Frame::Frame(const cv::cuda::GpuMat &image,
              uint64_t timestamp,
              uint64_t index)
     : gpu_image_(image),
+      preprocess_image_(preprocess_image),
       width_(width),
       height_(height),
       is_key_(is_key),
