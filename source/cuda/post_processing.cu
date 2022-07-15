@@ -31,6 +31,7 @@ static __global__ void postProcessingCu(float *inputs,
   if (tid > elements_number) {
     return;
   }
+  detections[tid].set_invalid();
   auto elements = inputs + tid * (num_classes + 5);
   float cls_conf = elements[4];
 
@@ -67,9 +68,12 @@ std::vector<Detection_> postProcessing(float *inputs,
   cudaDeviceSynchronize();
   CUDA_CHECK(cudaGetLastError())
   std::vector<Detection_> results;
+  std::vector<Detection_> detections_cpu(elements_number);
+
+  CUDA_CHECK(cudaMemcpy(detections_cpu.data(), detections, sizeof(Detection_) * elements_number, cudaMemcpyDeviceToHost));
   for (int i = 0; i < elements_number; ++i) {
-    if (detections[i].is_valid_) {
-      results.push_back(detections[i]);
+    if (detections_cpu[i].is_valid_) {
+      results.push_back(detections_cpu[i]);
     }
   }
   return results;

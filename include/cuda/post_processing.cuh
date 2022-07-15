@@ -28,6 +28,10 @@ struct Detection_ {
     class_id_ = class_id;
     is_valid_ = true;
   }
+
+  __device__ void set_invalid() {
+    is_valid_ = false;
+  }
 };
 
 std::vector<Detection_> postProcessing(float *inputs,
